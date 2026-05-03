@@ -30,6 +30,9 @@ ALLOWED_BUCKETS_AGGREGATE: dict[str, str] = {
     "1h": "1 hour",
 }
 
+# Action types accepted as a filter on /api/decisions/.
+ALLOWED_ACTIONS: set[str] = {"turn_on", "turn_off", "set_temp"}
+
 
 def dictfetchall(cursor) -> list[dict]:
     """Return all rows from a cursor as a list of dicts keyed by column name."""
