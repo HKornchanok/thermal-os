@@ -97,3 +97,30 @@ ZONE_ENERGY_TPL = """
 # All zones currently in the registry — used to ensure every bucket pivot
 # carries every zone key, even when a machine is OFF for the whole bucket.
 ALL_ZONES = "SELECT zone FROM building_machine ORDER BY id"
+
+
+# /api/decisions/ — count of matching rows for pagination metadata.
+# The `(%s::text IS NULL OR action_type = %s)` pattern lets the caller
+# pass NULL for the action filter to disable it. Bound twice (once for
+# the IS NULL check, once for the equality) so the count and page queries
+# share the same filter shape.
+DECISIONS_COUNT = """
+    SELECT COUNT(*) FROM building_aidecision
+    WHERE decided_at >= %s AND decided_at < %s
+      AND (%s::text IS NULL OR action_type = %s)
+"""
+
+
+# /api/decisions/ — one page of results. machine_name comes from a LEFT
+# JOIN so decisions whose machine has been deleted (ON DELETE SET NULL)
+# still appear with machine_name = NULL — preserves the audit trail.
+DECISIONS_PAGE = """
+    SELECT a.id, a.decided_at, a.machine_id, m.name AS machine_name,
+           a.action_type, a.value, a.reason
+    FROM building_aidecision a
+    LEFT JOIN building_machine m ON m.id = a.machine_id
+    WHERE a.decided_at >= %s AND a.decided_at < %s
+      AND (%s::text IS NULL OR a.action_type = %s)
+    ORDER BY a.decided_at DESC
+    LIMIT %s OFFSET %s
+"""
