@@ -1,10 +1,7 @@
 import Head from "next/head";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect } from "react";
-
-import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -17,9 +14,7 @@ export default function Home() {
   }, [status, router]);
 
   if (status === "loading") {
-    return (
-      <p className="p-6 text-muted-foreground">Loading…</p>
-    );
+    return <p className="text-muted-foreground">Loading…</p>;
   }
   if (!session) return null;
 
@@ -31,40 +26,32 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>ThermalOS</title>
+        <title>Overview · ThermalOS</title>
       </Head>
-      <main className="mx-auto box-border min-h-screen max-w-2xl px-6 py-20 text-foreground">
-        <h1 className="mt-0 text-2xl font-semibold">ThermalOS</h1>
-        <p data-testid="signed-in-as">
-          Signed in as <strong>{session.user?.name}</strong>.
+      <h1 className="mt-0 text-2xl font-semibold">Overview</h1>
+      <p className="mt-1 text-sm text-muted-foreground" data-testid="signed-in-as">
+        Signed in as <strong className="text-foreground">{session.user?.name}</strong>.
+      </p>
+
+      <section className="mt-6 rounded-lg border border-border bg-card p-4 text-card-foreground">
+        <h2 className="mt-0 text-sm font-medium text-muted-foreground">Auth proof</h2>
+        <p className="my-1 text-xs">
+          <strong>accessToken:</strong>{" "}
+          <code data-testid="access-token-preview" className="font-mono">
+            {accessPreview}
+          </code>
         </p>
-
-        <section className="my-4 rounded-lg border border-border bg-card p-4 text-card-foreground">
-          <h2 className="mt-0 text-sm font-medium text-muted-foreground">Auth proof</h2>
-          <p className="my-1 text-xs">
-            <strong>accessToken:</strong>{" "}
-            <code data-testid="access-token-preview" className="font-mono">
-              {accessPreview}
-            </code>
+        {session.error && (
+          <p className="text-xs text-destructive">
+            Token error: <code className="font-mono">{session.error}</code>
           </p>
-          {session.error && (
-            <p className="text-xs text-destructive">
-              Token error: <code className="font-mono">{session.error}</code>
-            </p>
-          )}
-        </section>
+        )}
+      </section>
 
-        <div className="flex items-center gap-2">
-          <Button
-            data-testid="signout"
-            variant="outline"
-            onClick={() => signOut({ callbackUrl: "/login" })}
-          >
-            Sign out
-          </Button>
-          <ThemeToggle />
-        </div>
-      </main>
+      <p className="mt-6 text-xs text-muted-foreground">
+        KPI cards, alert banner, and machine grid land in a later PR. This is the Overview
+        placeholder for now.
+      </p>
     </>
   );
 }
