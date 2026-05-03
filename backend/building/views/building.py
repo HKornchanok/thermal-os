@@ -7,7 +7,13 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from building import sql
-from building.utils import day_start, dictfetchall, get_max_recorded_at
+from building.utils import (
+    ALLOWED_BUCKETS_AGGREGATE,
+    day_start,
+    dictfetchall,
+    get_max_recorded_at,
+    parse_iso_datetime,
+)
 
 
 # Machine types whose temperature contributes to the building-wide
@@ -103,3 +109,47 @@ def _total_machines() -> int:
     with connection.cursor() as cursor:
         cursor.execute("SELECT COUNT(*) FROM building_machine")
         return cursor.fetchone()[0]
+
+
+@api_view(["GET"])
+def energy(request):
+    """Building-wide total power over a time range, time-bucketed.
+
+    Query params (all optional):
+        from    ISO 8601 datetime  default = `to` − 24 hours
+        to      ISO 8601 datetime  default = MAX(recorded_at)
+        bucket  ∈ {15min, 1h}      default 1h
+
+    Returns:
+        [ {"bucket": "<iso>", "total_kw": <float>}, ... ]
+    """
+    bucket_alias = request.query_params.get("bucket", "1h")
+    if bucket_alias not in ALLOWED_BUCKETS_AGGREGATE:
+        return Response({"detail": f"Invalid bucket: {bucket_alias!r}"}, status=400)
+    bucket_interval = ALLOWED_BUCKETS_AGGREGATE[bucket_alias]
+
+    try:
+        from_dt = parse_iso_datetime(request.query_params.get("from"))
+        to_dt = parse_iso_datetime(request.query_params.get("to"))
+    except ValueError as e:
+        return Response({"detail": f"Invalid datetime: {e}"}, status=400)
+
+    # Smart defaults — last 24 hours of available data.
+    if to_dt is None:
+        to_dt = get_max_recorded_at()
+        if to_dt is None:
+            return Response([])
+    if from_dt is None:
+        from_dt = to_dt - timedelta(hours=24)
+
+    sql_query = sql.TOTAL_ENERGY_TPL.format(bucket_interval=bucket_interval)
+    with connection.cursor() as cursor:
+        cursor.execute(sql_query, [from_dt, to_dt])
+        rows = cursor.fetchall()
+
+    return Response(
+        [
+            {"bucket": bucket.isoformat(), "total_kw": round(total_kw, 2) if total_kw else 0.0}
+            for bucket, total_kw in rows
+        ]
+    )
