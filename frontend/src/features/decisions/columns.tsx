@@ -1,10 +1,11 @@
 import type { ColumnDef } from "@tanstack/react-table";
 
+import { ColumnFilter } from "@/components/data-table/column-filter";
 import { Badge } from "@/components/ui/badge";
 import type { Decision, DecisionAction } from "@/lib/api";
 
 // =====================================================================
-// Lookup tables shared with the page (badge variants, filter options).
+// Lookup tables shared with the page (badge variants).
 // =====================================================================
 
 export const ACTION_LABELS: Record<DecisionAction, string> = {
@@ -28,7 +29,14 @@ export const ACTION_BADGE_VARIANT: Record<
   set_temp: "secondary",
 };
 
-const ACTION_FILTER_OPTIONS: { value: "" | DecisionAction; label: string }[] = [
+// =====================================================================
+// Filter value shapes the page deserialises out of state.columnFilters.
+// =====================================================================
+
+export type ActionFilter = "" | DecisionAction;
+export type DateRangeFilter = { from?: string; to?: string };
+
+const ACTION_FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "All" },
   { value: "turn_on", label: "Turn on" },
   { value: "turn_off", label: "Turn off" },
@@ -36,27 +44,12 @@ const ACTION_FILTER_OPTIONS: { value: "" | DecisionAction; label: string }[] = [
 ];
 
 // =====================================================================
-// Filter value shapes per column.
-//
-// We use TanStack Table's built-in column-filter API (column.getFilterValue
-// / column.setFilterValue), but with `manualFiltering: true` so the values
-// are just stored — the actual filtering happens server-side. Each filter
-// column declares its filter-value shape here so the page can deserialise
-// `state.columnFilters` into useDecisions params type-safely.
-// =====================================================================
-
-/** decided_at: a date range. Either bound is optional. */
-export type DateRangeFilter = { from?: string; to?: string };
-/** action_type: one of the allowed actions, or empty for "all". */
-export type ActionFilter = "" | DecisionAction;
-
-// =====================================================================
 // Column definitions.
 //
-// Headers are two-row: a label, then a filter input where the column
-// supports server-side filtering. Machine/Value/Reason aren't filterable
-// by the backend yet — they render label-only headers with a spacer to
-// keep the header row heights aligned.
+// Filterable columns declare `enableColumnFilter: true` and a
+// `meta.filterVariant` (+ filterOptions / filterLabel where useful).
+// Headers render the label plus a <ColumnFilter /> trigger; clicking
+// the funnel opens a popover with the matching input.
 // =====================================================================
 
 const formatDateTime = (iso: string): string =>
@@ -68,46 +61,32 @@ const formatDateTime = (iso: string): string =>
     minute: "2-digit",
   });
 
-const HEADER_INPUT_CLASS =
-  "rounded border border-input bg-background px-1.5 py-1 text-xs font-normal text-foreground focus:outline-none focus:ring-1 focus:ring-ring";
-
-const HEADER_FILTER_SPACER_HEIGHT = "h-[26px]"; // matches the filter input height
+/** Compact header row: label aligned left, optional filter trigger right. */
+function HeaderShell({
+  label,
+  children,
+}: {
+  label: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <span>{label}</span>
+      {children}
+    </div>
+  );
+}
 
 export const decisionColumns: ColumnDef<Decision>[] = [
   {
     accessorKey: "decided_at",
     enableColumnFilter: true,
-    header: ({ column }) => {
-      const filter = (column.getFilterValue() as DateRangeFilter | undefined) ?? {};
-      return (
-        <div className="flex flex-col gap-1">
-          <span>When</span>
-          <div className="flex items-center gap-1">
-            <input
-              type="date"
-              data-testid="filter-from"
-              value={filter.from ?? ""}
-              onChange={(e) =>
-                column.setFilterValue({ ...filter, from: e.target.value || undefined })
-              }
-              aria-label="Start date"
-              className={HEADER_INPUT_CLASS}
-            />
-            <span className="text-muted-foreground">→</span>
-            <input
-              type="date"
-              data-testid="filter-to"
-              value={filter.to ?? ""}
-              onChange={(e) =>
-                column.setFilterValue({ ...filter, to: e.target.value || undefined })
-              }
-              aria-label="End date"
-              className={HEADER_INPUT_CLASS}
-            />
-          </div>
-        </div>
-      );
-    },
+    meta: { filterVariant: "dateRange", filterLabel: "Date range" },
+    header: ({ column }) => (
+      <HeaderShell label="When">
+        <ColumnFilter column={column} />
+      </HeaderShell>
+    ),
     cell: ({ getValue }) => (
       <span className="whitespace-nowrap font-mono text-xs text-muted-foreground">
         {formatDateTime(getValue<string>())}
@@ -117,12 +96,7 @@ export const decisionColumns: ColumnDef<Decision>[] = [
   {
     accessorKey: "machine_name",
     enableColumnFilter: false,
-    header: () => (
-      <div className="flex flex-col gap-1">
-        <span>Machine</span>
-        <div className={HEADER_FILTER_SPACER_HEIGHT} aria-hidden />
-      </div>
-    ),
+    header: () => <HeaderShell label="Machine" />,
     cell: ({ getValue }) => {
       const name = getValue<string | null>();
       return name ? (
@@ -135,31 +109,16 @@ export const decisionColumns: ColumnDef<Decision>[] = [
   {
     accessorKey: "action_type",
     enableColumnFilter: true,
-    header: ({ column }) => {
-      const filter = (column.getFilterValue() as ActionFilter | undefined) ?? "";
-      return (
-        <div className="flex flex-col gap-1">
-          <span>Action</span>
-          <select
-            data-testid="filter-action"
-            value={filter}
-            onChange={(e) =>
-              column.setFilterValue(
-                e.target.value === "" ? undefined : (e.target.value as ActionFilter)
-              )
-            }
-            aria-label="Action filter"
-            className={HEADER_INPUT_CLASS}
-          >
-            {ACTION_FILTER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      );
+    meta: {
+      filterVariant: "select",
+      filterOptions: ACTION_FILTER_OPTIONS,
+      filterLabel: "Action",
     },
+    header: ({ column }) => (
+      <HeaderShell label="Action">
+        <ColumnFilter column={column} />
+      </HeaderShell>
+    ),
     cell: ({ getValue }) => {
       const action = getValue<DecisionAction>();
       return (
@@ -172,12 +131,7 @@ export const decisionColumns: ColumnDef<Decision>[] = [
   {
     accessorKey: "value",
     enableColumnFilter: false,
-    header: () => (
-      <div className="flex flex-col gap-1">
-        <span>Value</span>
-        <div className={HEADER_FILTER_SPACER_HEIGHT} aria-hidden />
-      </div>
-    ),
+    header: () => <HeaderShell label="Value" />,
     cell: ({ getValue, row }) => {
       const v = getValue<number | null>();
       if (v === null) return <span className="text-muted-foreground">—</span>;
@@ -195,12 +149,7 @@ export const decisionColumns: ColumnDef<Decision>[] = [
   {
     accessorKey: "reason",
     enableColumnFilter: false,
-    header: () => (
-      <div className="flex flex-col gap-1">
-        <span>Reason</span>
-        <div className={HEADER_FILTER_SPACER_HEIGHT} aria-hidden />
-      </div>
-    ),
+    header: () => <HeaderShell label="Reason" />,
     cell: ({ getValue }) => (
       <span className="text-sm text-foreground/90">{getValue<string>()}</span>
     ),
