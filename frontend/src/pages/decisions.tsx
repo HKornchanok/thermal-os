@@ -2,7 +2,6 @@ import Head from "next/head";
 import { useMemo, useState } from "react";
 import {
   type ColumnFiltersState,
-  flexRender,
   getCoreRowModel,
   type OnChangeFn,
   useReactTable,
@@ -10,15 +9,7 @@ import {
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { ErrorState, LoadingState } from "@/components/dashboard/states";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/data-table/data-table";
 import { useDecisions } from "@/lib/hooks/use-decisions";
 import type { Decision, DecisionAction } from "@/lib/api";
 import {
@@ -231,55 +222,22 @@ export default function DecisionsPage() {
       </div>
 
       <div className="mt-4 rounded-lg border border-border bg-card text-card-foreground">
-        {isLoading ? (
-          <LoadingState message="Loading decisions…" testId="decisions-loading" />
-        ) : isError ? (
-          <ErrorState
-            message={`Failed to load decisions: ${
-              error instanceof Error ? error.message : "unknown error"
-            }`}
-            testId="decisions-error"
-          />
-        ) : (
-          <Table data-testid="decisions-table">
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id} className="min-w-[120px]">
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {table.getRowModel().rows.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={decisionColumns.length}
-                    className="p-6 text-center text-sm text-muted-foreground"
-                    data-testid="decisions-empty"
-                  >
-                    No decisions match the current filters.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} className="min-w-[120px]">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        )}
+        <DataTable
+          table={table}
+          columns={decisionColumns}
+          isLoading={isLoading}
+          isError={isError}
+          error={error}
+          loadingMessage="Loading decisions…"
+          errorMessage="Failed to load decisions"
+          emptyMessage="No decisions match the current filters."
+          testIds={{
+            table: "decisions-table",
+            loading: "decisions-loading",
+            error: "decisions-error",
+            empty: "decisions-empty",
+          }}
+        />
       </div>
 
       <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
