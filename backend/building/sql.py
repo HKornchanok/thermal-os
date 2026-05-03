@@ -24,3 +24,21 @@ LATEST_READING_PER_MACHINE = """
     ) l ON TRUE
     ORDER BY m.id
 """
+
+
+# /api/machines/{id}/sensors/ — time-bucketed values for a single machine.
+# {metric} comes from utils.ALLOWED_METRICS allowlist; {bucket_interval}
+# from utils.ALLOWED_BUCKETS_FULL. machine_id and range bind via %s.
+# AVG ignores NULLs; the explicit `IS NOT NULL` filter keeps fully-empty
+# buckets from appearing in the response with a NULL value.
+SENSOR_TIMESERIES_TPL = """
+    SELECT time_bucket('{bucket_interval}'::interval, recorded_at) AS bucket,
+           AVG({metric}) AS value
+    FROM building_sensorreading
+    WHERE machine_id = %s
+      AND recorded_at >= %s
+      AND recorded_at < %s
+      AND {metric} IS NOT NULL
+    GROUP BY bucket
+    ORDER BY bucket
+"""
