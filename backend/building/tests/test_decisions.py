@@ -139,6 +139,35 @@ def test_decisions_action_filter_changes_count(admin_client):
     assert total == by_action
 
 
+def test_decisions_action_filter_accepts_comma_separated_list(admin_client):
+    """Multi-action filter via comma-separated list returns rows matching ANY
+    of the supplied actions."""
+    body = admin_client.get(
+        "/api/decisions/?action=turn_on,set_temp&page_size=100"
+    ).json()
+    assert body["count"] > 0
+    seen = {entry["action_type"] for entry in body["results"]}
+    assert seen.issubset({"turn_on", "set_temp"})
+
+
+def test_decisions_action_filter_multi_count_equals_sum_of_singles(admin_client):
+    """count for ?action=A,B should equal count(A) + count(B)."""
+    a = admin_client.get("/api/decisions/?action=turn_on&page_size=1").json()["count"]
+    b = admin_client.get("/api/decisions/?action=set_temp&page_size=1").json()["count"]
+    ab = admin_client.get(
+        "/api/decisions/?action=turn_on,set_temp&page_size=1"
+    ).json()["count"]
+    assert ab == a + b
+
+
+def test_decisions_action_filter_rejects_unknown_in_list(admin_client):
+    """Even one bad token in the comma-separated list returns 400."""
+    response = admin_client.get(
+        "/api/decisions/?action=turn_on,delete_everything"
+    )
+    assert response.status_code == 400
+
+
 # ---------- Decision content -------------------------------------------------
 
 

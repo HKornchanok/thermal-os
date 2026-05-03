@@ -50,9 +50,18 @@ def decisions_list(request):
     except ValueError as e:
         return Response({"detail": f"Invalid datetime: {e}"}, status=400)
 
-    action = request.query_params.get("action") or None
-    if action is not None and action not in ALLOWED_ACTIONS:
-        return Response({"detail": f"Invalid action: {action!r}"}, status=400)
+    # `action` accepts a comma-separated list (e.g. ?action=turn_on,set_temp).
+    # A single value still works — it becomes a one-element list. Each
+    # value is validated against the allowlist; one bad token → 400.
+    action_param = request.query_params.get("action") or None
+    actions: list[str] | None = None
+    if action_param:
+        actions = [a.strip() for a in action_param.split(",") if a.strip()]
+        for a in actions:
+            if a not in ALLOWED_ACTIONS:
+                return Response({"detail": f"Invalid action: {a!r}"}, status=400)
+        if not actions:
+            actions = None  # ?action=,, → treat as no filter
 
     try:
         page = int(request.query_params.get("page", 1))
@@ -93,12 +102,12 @@ def decisions_list(request):
     offset = (page - 1) * page_size
 
     with connection.cursor() as cursor:
-        cursor.execute(sql.DECISIONS_COUNT, [from_dt, to_dt, action, action])
+        cursor.execute(sql.DECISIONS_COUNT, [from_dt, to_dt, actions, actions])
         count = cursor.fetchone()[0]
 
         cursor.execute(
             sql.DECISIONS_PAGE,
-            [from_dt, to_dt, action, action, page_size, offset],
+            [from_dt, to_dt, actions, actions, page_size, offset],
         )
         rows = cursor.fetchall()
 
