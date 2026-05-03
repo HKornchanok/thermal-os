@@ -124,3 +124,19 @@ DECISIONS_PAGE = """
     ORDER BY a.decided_at DESC
     LIMIT %s OFFSET %s
 """
+
+
+# /api/energy/compare/ — average of hourly building totals for one period.
+# Avg-of-hourly-sums smooths over per-interval noise, giving a stable
+# comparison figure regardless of period length. The COALESCE keeps the
+# result a float (not NULL) when the window has no data.
+COMPARE_AVG = """
+    SELECT COALESCE(AVG(hourly_kw), 0) AS avg_kw
+    FROM (
+        SELECT time_bucket('1 hour'::interval, recorded_at) AS bucket,
+               SUM(power_kw) AS hourly_kw
+        FROM building_sensorreading
+        WHERE recorded_at >= %s AND recorded_at < %s
+        GROUP BY bucket
+    ) hourly
+"""

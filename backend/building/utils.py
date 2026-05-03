@@ -65,6 +65,15 @@ def get_max_recorded_at(machine_id: Optional[int] = None) -> Optional[datetime]:
     return row[0] if row and row[0] else None
 
 
+def get_min_max_recorded_at() -> tuple[Optional[datetime], Optional[datetime]]:
+    """Earliest and latest sensor timestamps. Used by /api/energy/compare/
+    to derive default before/after periods that span all available data."""
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT MIN(recorded_at), MAX(recorded_at) FROM building_sensorreading")
+        row = cursor.fetchone()
+    return (row[0], row[1]) if row else (None, None)
+
+
 def day_start(dt: datetime) -> datetime:
     """UTC midnight of the given datetime's date."""
     return datetime.combine(dt.date(), time.min, tzinfo=timezone.utc)
