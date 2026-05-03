@@ -14,6 +14,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -104,7 +105,12 @@ export function Sidebar() {
         </Button>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-0.5 px-2" aria-label="Primary">
+      <Separator className="bg-sidebar-border" />
+
+      <nav
+        className="mt-2 flex flex-1 flex-col gap-0.5 px-2"
+        aria-label="Primary"
+      >
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = router.pathname === item.href;

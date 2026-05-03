@@ -9,6 +9,13 @@ import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { ErrorState, LoadingState } from "@/components/dashboard/states";
 import { Button } from "@/components/ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -238,21 +245,28 @@ function DataTableFooter<TData>({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-2 text-xs text-muted-foreground">
       <div className="flex min-h-8 items-center gap-3">
-        <label className="flex items-center gap-2">
-          Per page
-          <select
-            data-testid={testIds?.pageSize ?? "page-size"}
-            value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="rounded-md border border-input bg-background px-2 py-1.5 text-xs text-foreground"
+        <div className="flex items-center gap-2">
+          <span>Per page</span>
+          <Select
+            value={String(pageSize)}
+            onValueChange={(v) => onPageSizeChange(Number(v))}
           >
-            {pageSizeOptions.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger
+              data-testid={testIds?.pageSize ?? "page-size"}
+              className="h-8 w-[4.5rem]"
+              aria-label="Rows per page"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {pageSizeOptions.map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  {n}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         {isFetching && (
           <span
             className="inline-flex items-center gap-1.5 leading-none"

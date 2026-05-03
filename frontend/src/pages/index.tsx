@@ -91,8 +91,12 @@ export default function OverviewPage() {
             <KpiCard
               label="Active"
               value={summary.active_machines}
-              hint={`${summary.inactive_machines} off`}
               testId="kpi-active"
+            />
+            <KpiCard
+              label="Inactive"
+              value={summary.inactive_machines}
+              testId="kpi-inactive"
             />
             <KpiCard
               label="Total power"
@@ -102,19 +106,12 @@ export default function OverviewPage() {
             <KpiCard
               label="Today's energy"
               value={`${fmtNum(summary.today_kwh)} kWh`}
+              // Trend hint already encodes the day-over-day delta against
+              // yesterday; the absolute number lives in the chart on /energy.
               hint={
                 <span className={trendHint.className}>{trendHint.text}</span>
               }
               testId="kpi-today-kwh"
-            />
-            <KpiCard
-              label="Yesterday"
-              value={
-                summary.yesterday_kwh !== null
-                  ? `${fmtNum(summary.yesterday_kwh)} kWh`
-                  : "—"
-              }
-              testId="kpi-yesterday-kwh"
             />
             <KpiCard
               label="Avg temperature"
