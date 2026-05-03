@@ -10,6 +10,7 @@ import { MachineCard } from "@/components/dashboard/machine-card";
 import { useAlerts } from "@/lib/hooks/use-alerts";
 import { useBuildingSummary } from "@/lib/hooks/use-building-summary";
 import { useMachines } from "@/lib/hooks/use-machines";
+import { fmtNum } from "@/lib/utils";
 
 export default function OverviewPage() {
   const { data: session, status } = useSession();
@@ -105,12 +106,12 @@ export default function OverviewPage() {
             />
             <KpiCard
               label="Total power"
-              value={`${summary.total_power_kw.toFixed(1)} kW`}
+              value={`${fmtNum(summary.total_power_kw)} kW`}
               testId="kpi-total-power"
             />
             <KpiCard
               label="Today's energy"
-              value={`${summary.today_kwh.toFixed(1)} kWh`}
+              value={`${fmtNum(summary.today_kwh)} kWh`}
               hint={
                 <span className={trendHint.className}>{trendHint.text}</span>
               }
@@ -120,7 +121,7 @@ export default function OverviewPage() {
               label="Yesterday"
               value={
                 summary.yesterday_kwh !== null
-                  ? `${summary.yesterday_kwh.toFixed(1)} kWh`
+                  ? `${fmtNum(summary.yesterday_kwh)} kWh`
                   : "—"
               }
               testId="kpi-yesterday-kwh"
