@@ -1,15 +1,13 @@
 import { Html, Head, Main, NextScript } from "next/document";
 
-// Apply the `dark` class on <html> so the .dark { ... } block in
-// globals.css overrides the :root light-theme variables. Without this,
-// <body>'s bg-background would resolve to the light value because
-// <body> sits OUTSIDE any wrapper component in _app.tsx.
-//
-// Dark mode is the default for a monitoring dashboard. A light/dark
-// toggle (later) can flip this class via document.documentElement.
+// next-themes manages the `class` attribute on <html> at runtime: it adds
+// `class="dark"` or `class="light"` based on user preference + system
+// setting, before paint, via a synchronous script injected in <head>.
+// Don't hardcode a class here or it'll fight the runtime toggle and
+// freeze the theme.
 export default function Document() {
   return (
-    <Html lang="en" className="dark">
+    <Html lang="en">
       <Head />
       <body>
         <Main />

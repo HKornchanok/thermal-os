@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -53,9 +54,16 @@ export default function Home() {
           )}
         </section>
 
-        <Button data-testid="signout" variant="outline" onClick={() => signOut({ callbackUrl: "/login" })}>
-          Sign out
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            data-testid="signout"
+            variant="outline"
+            onClick={() => signOut({ callbackUrl: "/login" })}
+          >
+            Sign out
+          </Button>
+          <ThemeToggle />
+        </div>
       </main>
     </>
   );

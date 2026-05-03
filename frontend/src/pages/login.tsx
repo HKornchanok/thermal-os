@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Login() {
   const router = useRouter();
@@ -39,7 +40,10 @@ export default function Login() {
       <Head>
         <title>Sign in · ThermalOS</title>
       </Head>
-      <main className="min-h-screen grid place-items-center bg-background text-foreground">
+      <main className="relative min-h-screen grid place-items-center bg-background text-foreground">
+        <div className="absolute right-4 top-4">
+          <ThemeToggle />
+        </div>
         <form
           onSubmit={onSubmit}
           className="flex w-80 flex-col gap-4 rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm"
