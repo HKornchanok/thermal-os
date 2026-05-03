@@ -14,7 +14,7 @@ export default function Home() {
   }, [status, router]);
 
   if (status === "loading") {
-    return <p className="p-6 text-muted-foreground">Loading…</p>;
+    return <p className="text-muted-foreground">Loading…</p>;
   }
   if (!session) return null;
 
@@ -28,32 +28,30 @@ export default function Home() {
       <Head>
         <title>Overview · ThermalOS</title>
       </Head>
-      <div className="mx-auto max-w-6xl px-6 py-8">
-        <h1 className="mt-0 text-2xl font-semibold">Overview</h1>
-        <p className="mt-1 text-sm text-muted-foreground" data-testid="signed-in-as">
-          Signed in as <strong className="text-foreground">{session.user?.name}</strong>.
-        </p>
+      <h1 className="mt-0 text-2xl font-semibold">Overview</h1>
+      <p className="mt-1 text-sm text-muted-foreground" data-testid="signed-in-as">
+        Signed in as <strong className="text-foreground">{session.user?.name}</strong>.
+      </p>
 
-        <section className="mt-6 rounded-lg border border-border bg-card p-4 text-card-foreground">
-          <h2 className="mt-0 text-sm font-medium text-muted-foreground">Auth proof</h2>
-          <p className="my-1 text-xs">
-            <strong>accessToken:</strong>{" "}
-            <code data-testid="access-token-preview" className="font-mono">
-              {accessPreview}
-            </code>
+      <section className="mt-6 rounded-lg border border-border bg-card p-4 text-card-foreground">
+        <h2 className="mt-0 text-sm font-medium text-muted-foreground">Auth proof</h2>
+        <p className="my-1 text-xs">
+          <strong>accessToken:</strong>{" "}
+          <code data-testid="access-token-preview" className="font-mono">
+            {accessPreview}
+          </code>
+        </p>
+        {session.error && (
+          <p className="text-xs text-destructive">
+            Token error: <code className="font-mono">{session.error}</code>
           </p>
-          {session.error && (
-            <p className="text-xs text-destructive">
-              Token error: <code className="font-mono">{session.error}</code>
-            </p>
-          )}
-        </section>
+        )}
+      </section>
 
-        <p className="mt-6 text-xs text-muted-foreground">
-          KPI cards, alert banner, and machine grid land in a later PR. This is
-          the Overview placeholder for now.
-        </p>
-      </div>
+      <p className="mt-6 text-xs text-muted-foreground">
+        KPI cards, alert banner, and machine grid land in a later PR. This is the Overview
+        placeholder for now.
+      </p>
     </>
   );
 }

@@ -4,11 +4,17 @@ import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 
 /**
- * App shell. Sidebar (brand + nav) on the left, Header (user/theme/signout)
- * across the top of the main column, page content below.
+ * App shell. Sidebar (brand + nav) on the left, Header (theme + account)
+ * across the top of the main column, page content below in a centred,
+ * max-width container.
  *
- * `_app.tsx` wraps every authenticated route with this; `/login` opts out
- * (it has its own centred layout).
+ * The container lives here, not on each page, so:
+ *   1. Padding stays consistent across every route — no duplication
+ *   2. When the sidebar collapses, the gutters around the content remain
+ *      stable. Otherwise pages would `mx-auto`-center within a wider
+ *      <main> and shift visibly leftward as the sidebar shrinks.
+ *
+ * `_app.tsx` wraps every authenticated route with this; `/login` opts out.
  */
 export function Layout({ children }: { children: ReactNode }) {
   return (
@@ -16,7 +22,9 @@ export function Layout({ children }: { children: ReactNode }) {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Header />
-        <main className="flex-1 overflow-auto">{children}</main>
+        <main className="flex-1 overflow-auto">
+          <div className="mx-auto w-full max-w-6xl px-6 py-8">{children}</div>
+        </main>
       </div>
     </div>
   );
