@@ -1,5 +1,7 @@
 """Machine registry + per-machine sensor time-series."""
 
+from datetime import timedelta
+
 from django.db import connection
 from django.http import Http404
 from rest_framework.decorators import api_view
@@ -9,8 +11,6 @@ from building import sql
 from building.utils import (
     ALLOWED_BUCKETS_FULL,
     ALLOWED_METRICS,
-    day_end,
-    day_start,
     dictfetchall,
     get_max_recorded_at,
     parse_iso_datetime,
@@ -61,8 +61,8 @@ def machine_sensors(request, machine_id: int):
     Query params (all optional):
         metric  ∈ {power_kw, temperature, setpoint, speed_pct}  default power_kw
         bucket  ∈ {5min, 15min, 1h, 1d}                          default 5min
-        from    ISO 8601 datetime                                default = day_start of MAX(recorded_at)
-        to      ISO 8601 datetime                                default = day_end   of MAX(recorded_at)
+        from    ISO 8601 datetime                                default = `to` − 24 hours
+        to      ISO 8601 datetime                                default = MAX(recorded_at)
 
     Returns:
         [ {"bucket": "<iso>", "value": <float>}, ... ]
@@ -91,17 +91,17 @@ def machine_sensors(request, machine_id: int):
     except ValueError as e:
         return Response({"detail": f"Invalid datetime: {e}"}, status=400)
 
-    # Smart default — anchor to this machine's latest reading. Guarantees the
-    # chart shows data on first load whether the seed is live or seeded
-    # forward in time.
-    if from_dt is None or to_dt is None:
-        max_ts = get_max_recorded_at(machine_id=machine_id)
-        if max_ts is None:
-            return Response([])
-        if from_dt is None:
-            from_dt = day_start(max_ts)
+    # Smart default — last 24 hours ending at this machine's latest reading.
+    # A sliding 24h window matches what an operations dashboard wants to
+    # show ("what happened in the last day") and matches the Energy page's
+    # default behaviour. A calendar-day window would clip to half a day on
+    # an operator opening the page right after midnight.
+    if to_dt is None:
+        to_dt = get_max_recorded_at(machine_id=machine_id)
         if to_dt is None:
-            to_dt = day_end(max_ts)
+            return Response([])
+    if from_dt is None:
+        from_dt = to_dt - timedelta(hours=24)
 
     sql_query = sql.SENSOR_TIMESERIES_TPL.format(
         metric=metric,

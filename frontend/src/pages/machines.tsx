@@ -85,10 +85,25 @@ export default function MachinesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMachine?.id]);
 
+  // "Last 24 hours from now" — the sliding window operators expect on a
+  // live dashboard. If the browser clock is 06:00 today, the chart spans
+  // 06:00 yesterday → 06:00 today. Anchor on the SELECTED machine so the
+  // window is fresh whenever the user clicks into a different machine,
+  // but stable while they switch metric tabs (no chart flicker).
+  const { fromIso, toIso } = useMemo(() => {
+    const now = Date.now();
+    return {
+      toIso: new Date(now).toISOString(),
+      fromIso: new Date(now - 24 * 60 * 60 * 1000).toISOString(),
+    };
+  }, [selectedId]);
+
   const sensorsQuery = useMachineSensors({
     machineId: selectedId ?? 0,
     metric,
     bucket: "5min",
+    from: fromIso,
+    to: toIso,
   });
   const sensorPoints = sensorsQuery.data ?? [];
 

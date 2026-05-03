@@ -380,6 +380,7 @@ def _gen_day_decisions(machines: dict[str, MachineCtx], day_start: datetime) -> 
 # Specific values the test-suite asserts. Keep these in sync with
 # backend/building/tests/test_alerts.py if either changes.
 ENGINEERED_AC_L1_POWER_KW = 41.4   # 92% of 45 kW rated → power_spike (warning)
+ENGINEERED_AC_L1_STUCK_HOURS = 1   # how long the spike has been stuck
 ENGINEERED_AC_S2_TEMP_C = 27.1     # vs setpoint 24.0 → 3.1°C drift (warning)
 ENGINEERED_AC_S2_SETPOINT_C = 24.0
 ENGINEERED_AC_L3_RUNTIME_H = 19    # consecutive ON hours → nonstop_runtime (critical)
@@ -396,8 +397,12 @@ def _apply_engineered_alerts(
     populates with realistic-looking values from a coherent moment in time
     (rather than three distinct "this happened a week ago" anomalies).
 
-    1. AC-L1 power_spike — last reading shows 41.4 kW (92% of rated). Tweak
-       only the final 5-min slot so the chart spike is visible and recent.
+    1. AC-L1 power_spike — "stuck-on" pattern: the trailing hour is held
+       at 41.4 kW (92% of rated) instead of dropping to night-mode load
+       around 22:00. The chart shows AC-L1's power line flatlining high
+       from ~23:00 onward — a believable failure mode (control valve
+       stuck open) rather than a single anomalous spike at 23:55 that
+       a viewer would correctly question as implausible during night mode.
     2. AC-S2 temp_drift — last reading shows temperature=27.1, setpoint=24.0.
        Visible as a single "hot reading at the end" point on the chart.
     3. AC-L3 nonstop_runtime — every reading in the trailing 19 hours is
@@ -407,21 +412,38 @@ def _apply_engineered_alerts(
     by_machine = {m.name: m.id for m in machines}
     last_dt = max(r.recorded_at for r in rows)
     nonstop_window_start = last_dt - timedelta(hours=ENGINEERED_AC_L3_RUNTIME_H)
+    stuck_window_start = last_dt - timedelta(hours=ENGINEERED_AC_L1_STUCK_HOURS)
 
     ac_l1_id = by_machine.get("AC-L1")
     ac_s2_id = by_machine.get("AC-S2")
     ac_l3_id = by_machine.get("AC-L3")
 
     for r in rows:
-        # 1. AC-L1 power spike at the very last slot.
-        if r.machine_id == ac_l1_id and r.recorded_at == last_dt:
-            r.power_kw = ENGINEERED_AC_L1_POWER_KW
+        # 1. AC-L1 stuck-high across the last hour. Power flatlines at the
+        #    spike value instead of decaying for night mode. Indoor temp
+        #    drifts cool (machine over-cooling because it can't ramp down)
+        #    so the narrative reads as "valve stuck open" not "natural
+        #    midday peak". Setpoint stays at night-mode 27°C — the contrast
+        #    between target and load is what makes the anomaly visible.
+        if (
+            r.machine_id == ac_l1_id
+            and stuck_window_start <= r.recorded_at <= last_dt
+        ):
+            # Small jitter on the trailing slots so the line isn't a
+            # perfectly flat segment — feels like sampled hardware, not
+            # a hardcoded constant. Final slot is exactly 41.4 to satisfy
+            # the alert test which checks the latest reading's value.
+            if r.recorded_at == last_dt:
+                r.power_kw = ENGINEERED_AC_L1_POWER_KW
+            else:
+                r.power_kw = round(
+                    ENGINEERED_AC_L1_POWER_KW + random.gauss(0, 0.3), 2
+                )
             r.status = SensorReading.ON
-            # Setpoint at the end of the day for AC-L1 is night-mode 27°C
-            # per _setpoint_for; leave temp realistic so it doesn't also
-            # trigger temp_drift (which would be misleading double-fire).
+            # Over-cool: the stuck-on AC keeps cooling past the night
+            # setpoint. Indoor reads ~23°C against a 27°C target.
             if r.temperature is not None:
-                r.temperature = max(r.temperature, 26.5)
+                r.temperature = round(23.0 + random.gauss(0, 0.3), 2)
 
         # 2. AC-S2 temp drift at the very last slot.
         if r.machine_id == ac_s2_id and r.recorded_at == last_dt:
