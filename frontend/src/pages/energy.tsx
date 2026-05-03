@@ -13,7 +13,7 @@ import {
 } from "@/lib/chart";
 import { useBuildingEnergy } from "@/lib/hooks/use-building-energy";
 import { useBuildingEnergyByZone } from "@/lib/hooks/use-building-energy-by-zone";
-import { cn } from "@/lib/utils";
+import { cn, fmtNum } from "@/lib/utils";
 
 const BUCKET_OPTIONS = [
   { value: "1h", label: "1 hour" },
@@ -236,8 +236,8 @@ export default function EnergyPage() {
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-3">
-        <KpiCard label="Peak" value={`${peak.toFixed(1)} kW`} testId="energy-peak" />
-        <KpiCard label="Average" value={`${avg.toFixed(1)} kW`} testId="energy-avg" />
+        <KpiCard label="Peak" value={`${fmtNum(peak)} kW`} testId="energy-peak" />
+        <KpiCard label="Average" value={`${fmtNum(avg)} kW`} testId="energy-avg" />
         <KpiCard
           label="Data points"
           value={count.toLocaleString()}
@@ -279,10 +279,10 @@ export default function EnergyPage() {
                 xKey="bucket"
                 series={[{ key: "total_kw", name: "Total" }]}
                 xTickFormatter={(v) => formatBucketTime(v as string)}
-                yTickFormatter={(v) => `${(v as number).toFixed(0)} kW`}
+                yTickFormatter={(v) => `${fmtNum(v as number, 0)} kW`}
                 tooltipLabelFormatter={(v) => formatBucketLabel(v as string)}
                 tooltipFormatter={(v) => [
-                  `${(v as number).toFixed(1)} kW`,
+                  `${fmtNum(v as number)} kW`,
                   "Total",
                 ]}
               />
@@ -300,10 +300,10 @@ export default function EnergyPage() {
                 series={visibleZoneSeries}
                 stacked
                 xTickFormatter={(v) => formatBucketTime(v as string)}
-                yTickFormatter={(v) => `${(v as number).toFixed(0)} kW`}
+                yTickFormatter={(v) => `${fmtNum(v as number, 0)} kW`}
                 tooltipLabelFormatter={(v) => formatBucketLabel(v as string)}
                 tooltipFormatter={(v, name) => [
-                  `${(v as number).toFixed(1)} kW`,
+                  `${fmtNum(v as number)} kW`,
                   name,
                 ]}
               />

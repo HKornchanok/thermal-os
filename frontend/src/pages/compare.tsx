@@ -7,6 +7,7 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { Button } from "@/components/ui/button";
 import { useBuildingEnergy } from "@/lib/hooks/use-building-energy";
 import { useEnergyCompare } from "@/lib/hooks/use-energy-compare";
+import { fmtNum } from "@/lib/utils";
 
 const SERIES_BEFORE = "Before AI";
 const SERIES_AFTER = "After AI";
@@ -190,13 +191,13 @@ export default function ComparePage() {
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <KpiCard
               label="Before — avg power"
-              value={`${compare.before.avg_kw.toFixed(0)} kW`}
+              value={`${fmtNum(compare.before.avg_kw)} kW`}
               hint="Period A"
               testId="kpi-before-avg"
             />
             <KpiCard
               label="After — avg power"
-              value={`${compare.after.avg_kw.toFixed(0)} kW`}
+              value={`${fmtNum(compare.after.avg_kw)} kW`}
               hint="Period B"
               testId="kpi-after-avg"
             />
@@ -270,7 +271,7 @@ export default function ComparePage() {
                 { key: SERIES_AFTER },
               ]}
               xTickFormatter={(v) => `${v}h`}
-              yTickFormatter={(v) => `${(v as number).toFixed(0)} kW`}
+              yTickFormatter={(v) => `${fmtNum(v as number, 0)} kW`}
               tooltipLabelFormatter={(v) => {
                 const hours = v as number;
                 const days = Math.floor(hours / 24);
@@ -278,7 +279,7 @@ export default function ComparePage() {
                 return days > 0 ? `Day ${days + 1}, h+${rem}` : `h+${hours}`;
               }}
               tooltipFormatter={(v, name) => [
-                `${(v as number).toFixed(1)} kW`,
+                `${fmtNum(v as number)} kW`,
                 name,
               ]}
             />
