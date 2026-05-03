@@ -125,13 +125,7 @@ export function DataTable<TData, TValue>({
 
   return (
     <>
-      {/* table-fixed: column widths are determined only by the first row
-          (the headers) and their min-w / meta.minWidth values. Without
-          this, an empty body's colSpan'd "no results" cell makes the
-          browser fall back to header-only sizing while a populated body
-          would use longer cell content — visibly different widths between
-          states. Fixed layout pins widths regardless of body content. */}
-      <Table data-testid={testIds?.table} className="table-fixed">
+      <Table data-testid={testIds?.table}>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
