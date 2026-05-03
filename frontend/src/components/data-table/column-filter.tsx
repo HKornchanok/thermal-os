@@ -75,36 +75,6 @@ const DATE_OP_OPTIONS: { value: DateFilterOp; label: string }[] = [
 
 const DATE_ONLY_OPS = new Set<DateFilterOp>(["on"]);
 
-/** YYYY-MM-DDTHH:MM in the browser's local time, suitable for datetime-local. */
-function nowDatetimeLocal(): string {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
-    `T${pad(now.getHours())}:${pad(now.getMinutes())}`
-  );
-}
-
-/** YYYY-MM-DD in the browser's local time, suitable for date inputs. */
-function todayDate(): string {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
-/** Sensible default value for an operator — the current local moment. */
-function defaultValueForOp(op: DateFilterOp): DateFilterValue {
-  const dt = nowDatetimeLocal();
-  switch (op) {
-    case "between":
-      return { op, from: dt, to: dt };
-    case "on":
-      return { op, value: todayDate() };
-    default:
-      return { op, value: dt };
-  }
-}
-
 /** Whether a date filter holds enough data to be considered active. */
 function isDateFilterActive(v: DateFilterValue | undefined): boolean {
   if (!v) return false;
@@ -236,16 +206,17 @@ function FilterInput<TData>({
   }
 
   if (variant === "date") {
-    // No filter set yet → default to current time when the user picks
-    // an operator (rather than starting from a blank field). The
-    // operator dropdown also seeds an initial value so the filter is
-    // immediately usable without typing the whole datetime.
+    // Start with empty fields. Operator defaults to "between" only so the
+    // dropdown has a selected option; the from/to inputs themselves are
+    // blank until the user picks a date.
     const current =
       (column.getFilterValue() as DateFilterValue | undefined) ??
-      defaultValueForOp("between");
+      ({ op: "between" } as DateFilterValue);
 
+    // Switching the operator clears any value-side state so we don't
+    // carry a stale `from`/`to` into a single-date op (or vice versa).
     const setOp = (op: DateFilterOp) => {
-      column.setFilterValue(defaultValueForOp(op));
+      column.setFilterValue({ op } as DateFilterValue);
     };
 
     return (
