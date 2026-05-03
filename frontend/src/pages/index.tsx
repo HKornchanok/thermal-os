@@ -1,9 +1,17 @@
 import Head from "next/head";
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/router";
+import { useSession } from "next-auth/react";
 import { useEffect } from "react";
 
-export default function Home() {
+import { AlertBanner } from "@/components/dashboard/alert-banner";
+import { ErrorState, LoadingState } from "@/components/dashboard/states";
+import { KpiCard } from "@/components/dashboard/kpi-card";
+import { MachineCard } from "@/components/dashboard/machine-card";
+import { useAlerts } from "@/lib/hooks/use-alerts";
+import { useBuildingSummary } from "@/lib/hooks/use-building-summary";
+import { useMachines } from "@/lib/hooks/use-machines";
+
+export default function OverviewPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
@@ -13,45 +21,160 @@ export default function Home() {
     }
   }, [status, router]);
 
+  const summaryQuery = useBuildingSummary();
+  const alertsQuery = useAlerts();
+  const machinesQuery = useMachines();
+
   if (status === "loading") {
-    return <p className="text-muted-foreground">Loading…</p>;
+    return <LoadingState message="Loading session…" />;
   }
   if (!session) return null;
 
-  // Display only the head and tail of the access token — enough to confirm
-  // it's present without spilling the whole bearer in screenshots.
-  const access = session.accessToken ?? "";
-  const accessPreview = access ? `${access.slice(0, 12)}…${access.slice(-12)}` : "(none)";
+  const summary = summaryQuery.data;
+  const alerts = alertsQuery.data ?? [];
+  const machines = machinesQuery.data ?? [];
+
+  // Trend hint string + colour for the today's-kWh card. Server returns
+  // null when there is no yesterday baseline (first-day data); show
+  // "no baseline" rather than a misleading "—".
+  const trendHint = (() => {
+    if (!summary || summary.trend_pct === null) {
+      return { text: "no baseline yet", className: "text-muted-foreground" };
+    }
+    const sign = summary.trend_pct > 0 ? "+" : "";
+    return {
+      text: `${sign}${summary.trend_pct.toFixed(1)}% vs yesterday`,
+      className:
+        summary.trend_pct > 0
+          ? "text-destructive"
+          : summary.trend_pct < 0
+          ? "text-primary"
+          : "text-muted-foreground",
+    };
+  })();
 
   return (
     <>
       <Head>
         <title>Overview · ThermalOS</title>
       </Head>
-      <h1 className="mt-0 text-2xl font-semibold">Overview</h1>
-      <p className="mt-1 text-sm text-muted-foreground" data-testid="signed-in-as">
-        Signed in as <strong className="text-foreground">{session.user?.name}</strong>.
-      </p>
 
-      <section className="mt-6 rounded-lg border border-border bg-card p-4 text-card-foreground">
-        <h2 className="mt-0 text-sm font-medium text-muted-foreground">Auth proof</h2>
-        <p className="my-1 text-xs">
-          <strong>accessToken:</strong>{" "}
-          <code data-testid="access-token-preview" className="font-mono">
-            {accessPreview}
-          </code>
+      <div className="flex items-baseline justify-between gap-4">
+        <h1 className="mt-0 text-2xl font-semibold">Overview</h1>
+        <p className="text-xs text-muted-foreground">
+          Signed in as{" "}
+          <strong className="text-foreground">{session.user?.name}</strong>
         </p>
-        {session.error && (
-          <p className="text-xs text-destructive">
-            Token error: <code className="font-mono">{session.error}</code>
-          </p>
-        )}
+      </div>
+
+      {/* Alerts — only renders when there are any. */}
+      {alertsQuery.isSuccess && alerts.length > 0 && (
+        <section className="mt-4">
+          <AlertBanner
+            alerts={alerts}
+            onSelect={(id) => router.push(`/machines?selected=${id}`)}
+          />
+        </section>
+      )}
+
+      {/* KPIs */}
+      <section className="mt-4" data-testid="overview-kpis">
+        {summaryQuery.isLoading ? (
+          <LoadingState message="Loading KPIs…" testId="kpis-loading" />
+        ) : summaryQuery.isError ? (
+          <ErrorState
+            message={`Failed to load summary: ${
+              summaryQuery.error instanceof Error
+                ? summaryQuery.error.message
+                : "unknown error"
+            }`}
+            testId="kpis-error"
+          />
+        ) : summary ? (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            <KpiCard
+              label="Total machines"
+              value={summary.total_machines}
+              testId="kpi-total-machines"
+            />
+            <KpiCard
+              label="Active"
+              value={summary.active_machines}
+              hint={`${summary.inactive_machines} off`}
+              testId="kpi-active"
+            />
+            <KpiCard
+              label="Total power"
+              value={`${summary.total_power_kw.toFixed(1)} kW`}
+              testId="kpi-total-power"
+            />
+            <KpiCard
+              label="Today's energy"
+              value={`${summary.today_kwh.toFixed(1)} kWh`}
+              hint={
+                <span className={trendHint.className}>{trendHint.text}</span>
+              }
+              testId="kpi-today-kwh"
+            />
+            <KpiCard
+              label="Yesterday"
+              value={
+                summary.yesterday_kwh !== null
+                  ? `${summary.yesterday_kwh.toFixed(1)} kWh`
+                  : "—"
+              }
+              testId="kpi-yesterday-kwh"
+            />
+            <KpiCard
+              label="Avg temperature"
+              value={
+                summary.avg_temperature !== null
+                  ? `${summary.avg_temperature.toFixed(1)} °C`
+                  : "—"
+              }
+              hint="ON ACs only"
+              testId="kpi-avg-temp"
+            />
+          </div>
+        ) : null}
       </section>
 
-      <p className="mt-6 text-xs text-muted-foreground">
-        KPI cards, alert banner, and machine grid land in a later PR. This is the Overview
-        placeholder for now.
-      </p>
+      {/* Machine grid */}
+      <section className="mt-6">
+        <div className="mb-3 flex items-baseline justify-between gap-4">
+          <h2 className="m-0 text-sm font-medium text-muted-foreground">
+            Machines
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {machines.length || "…"} total
+          </p>
+        </div>
+        {machinesQuery.isLoading ? (
+          <LoadingState message="Loading machines…" testId="machines-loading" />
+        ) : machinesQuery.isError ? (
+          <ErrorState
+            message={`Failed to load machines: ${
+              machinesQuery.error instanceof Error
+                ? machinesQuery.error.message
+                : "unknown error"
+            }`}
+            testId="machines-error"
+          />
+        ) : (
+          <div
+            data-testid="machines-grid"
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4"
+          >
+            {machines.map((m) => (
+              <MachineCard
+                key={m.id}
+                machine={m}
+                onClick={() => router.push(`/machines?selected=${m.id}`)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
     </>
   );
 }
