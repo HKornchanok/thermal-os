@@ -76,3 +76,24 @@ TOTAL_ENERGY_TPL = """
     GROUP BY bucket
     ORDER BY bucket
 """
+
+
+# /api/building/energy/by-zone/ — same range as TOTAL_ENERGY_TPL but
+# grouped by zone. The view pivots rows in Python so the response is one
+# entry per bucket with zone names as keys mixed alongside the `bucket`
+# key — the frontend maps each zone key to a Recharts <Area> directly.
+ZONE_ENERGY_TPL = """
+    SELECT time_bucket('{bucket_interval}'::interval, sr.recorded_at) AS bucket,
+           m.zone,
+           SUM(sr.power_kw) AS total_kw
+    FROM building_sensorreading sr
+    JOIN building_machine m ON m.id = sr.machine_id
+    WHERE sr.recorded_at >= %s AND sr.recorded_at < %s
+    GROUP BY bucket, m.zone
+    ORDER BY bucket, m.zone
+"""
+
+
+# All zones currently in the registry — used to ensure every bucket pivot
+# carries every zone key, even when a machine is OFF for the whole bucket.
+ALL_ZONES = "SELECT zone FROM building_machine ORDER BY id"
