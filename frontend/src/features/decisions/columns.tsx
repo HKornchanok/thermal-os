@@ -34,7 +34,9 @@ export const ACTION_BADGE_VARIANT: Record<
 // =====================================================================
 
 export type ActionFilter = "" | DecisionAction;
-export type DateRangeFilter = { from?: string; to?: string };
+// Re-export the shared discriminated union so the page can import a
+// single canonical type instead of redeclaring it.
+export type { DateFilterValue, DateFilterOp } from "@/components/data-table/column-filter";
 
 const ACTION_FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "All" },
@@ -81,7 +83,7 @@ export const decisionColumns: ColumnDef<Decision>[] = [
   {
     accessorKey: "decided_at",
     enableColumnFilter: true,
-    meta: { filterVariant: "dateRange", filterLabel: "Date range" },
+    meta: { filterVariant: "date", filterLabel: "Decided at" },
     header: ({ column }) => (
       <HeaderShell label="When">
         <ColumnFilter column={column} />

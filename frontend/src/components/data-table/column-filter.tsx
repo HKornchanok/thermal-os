@@ -31,7 +31,7 @@ declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData extends RowData, TValue> {
     /** Which input renders inside the popover for this column. */
-    filterVariant?: "select" | "dateRange";
+    filterVariant?: "select" | "date";
     /** Required for variant="select". Empty value = "no filter". */
     filterOptions?: { value: string; label: string }[];
     /** Optional human label used in the popover heading + aria. */
@@ -39,28 +39,55 @@ declare module "@tanstack/react-table" {
   }
 }
 
-export type DateRangeFilterValue = { from?: string; to?: string };
+// ---------------------------------------------------------------------
+// Date filter shape — discriminated union by operator.
+// ---------------------------------------------------------------------
+
+export type DateFilterOp = "between" | "on" | "before" | "after";
+
+export type DateFilterValue =
+  | { op: "between"; from?: string; to?: string }
+  | { op: "on"; value?: string }
+  | { op: "before"; value?: string }
+  | { op: "after"; value?: string };
+
+const DATE_OP_OPTIONS: { value: DateFilterOp; label: string }[] = [
+  { value: "between", label: "Between" },
+  { value: "on", label: "On" },
+  { value: "before", label: "Before" },
+  { value: "after", label: "After" },
+];
+
+/** Treat a date filter as inactive if the operator's value(s) are blank. */
+function isDateFilterActive(v: DateFilterValue | undefined): boolean {
+  if (!v) return false;
+  if (v.op === "between") return !!(v.from || v.to);
+  return !!v.value;
+}
+
+// ---------------------------------------------------------------------
+// Generic active-filter detection used for the trigger-button indicator.
+// ---------------------------------------------------------------------
+
+function isFilterActive(value: unknown): boolean {
+  if (value === undefined || value === null || value === "") return false;
+  if (typeof value === "object") {
+    const v = value as DateFilterValue & Record<string, unknown>;
+    if (typeof v.op === "string") return isDateFilterActive(v);
+    return Object.values(v).some((x) => x !== undefined && x !== "");
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------
 
 const INPUT_CLASS =
   "rounded border border-input bg-background px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring";
 
 interface ColumnFilterProps<TData> {
   column: Column<TData, unknown>;
-}
-
-/**
- * Treat empty objects (`{}`) and empty strings as inactive. dateRange
- * clears to `undefined` so this is mostly defensive against partial
- * resets that leave behind `{ from: undefined, to: undefined }`.
- */
-function isFilterActive(value: unknown): boolean {
-  if (value === undefined || value === null || value === "") return false;
-  if (typeof value === "object") {
-    return Object.values(value as Record<string, unknown>).some(
-      (v) => v !== undefined && v !== ""
-    );
-  }
-  return true;
 }
 
 export function ColumnFilter<TData>({ column }: ColumnFilterProps<TData>) {
@@ -97,7 +124,7 @@ export function ColumnFilter<TData>({ column }: ColumnFilterProps<TData>) {
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="start" className="w-auto min-w-[12rem]">
+      <PopoverContent align="start" className="w-auto min-w-[14rem]">
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs font-medium text-muted-foreground">
             {label}
@@ -156,44 +183,112 @@ function FilterInput<TData>({
     );
   }
 
-  if (variant === "dateRange") {
-    const value =
-      (column.getFilterValue() as DateRangeFilterValue | undefined) ?? {};
-    const update = (next: DateRangeFilterValue) => {
-      // Clear entirely when both bounds are empty so the filter doesn't
-      // linger as { from: undefined, to: undefined } in columnFilters.
-      if (!next.from && !next.to) column.setFilterValue(undefined);
-      else column.setFilterValue(next);
+  if (variant === "date") {
+    const current = (column.getFilterValue() as DateFilterValue | undefined) ?? {
+      op: "between",
     };
+
+    const setOp = (op: DateFilterOp) => {
+      // Reset the value side of the union when changing operator so we
+      // don't carry stale `from`/`to` into single-date ops or vice versa.
+      if (op === "between") column.setFilterValue({ op });
+      else column.setFilterValue({ op });
+    };
+
     return (
       <div className="flex flex-col gap-2">
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          From
-          <input
-            type="date"
-            data-testid={`filter-${column.id}-from`}
-            value={value.from ?? ""}
-            onChange={(e) =>
-              update({ ...value, from: e.target.value || undefined })
-            }
-            className={INPUT_CLASS}
-          />
+          Operator
+          <select
+            data-testid={`filter-${column.id}-op`}
+            value={current.op}
+            onChange={(e) => setOp(e.target.value as DateFilterOp)}
+            className={cn(INPUT_CLASS, "w-full")}
+          >
+            {DATE_OP_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          To
-          <input
-            type="date"
-            data-testid={`filter-${column.id}-to`}
-            value={value.to ?? ""}
-            onChange={(e) =>
-              update({ ...value, to: e.target.value || undefined })
-            }
-            className={INPUT_CLASS}
-          />
-        </label>
+
+        {current.op === "between" ? (
+          <BetweenInputs column={column} value={current} />
+        ) : (
+          <SingleDateInput column={column} value={current} />
+        )}
       </div>
     );
   }
 
   return null;
+}
+
+function BetweenInputs<TData>({
+  column,
+  value,
+}: {
+  column: Column<TData, unknown>;
+  value: Extract<DateFilterValue, { op: "between" }>;
+}) {
+  const update = (next: Extract<DateFilterValue, { op: "between" }>) => {
+    if (!next.from && !next.to) column.setFilterValue(undefined);
+    else column.setFilterValue(next);
+  };
+
+  return (
+    <>
+      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        From
+        <input
+          type="date"
+          data-testid={`filter-${column.id}-from`}
+          value={value.from ?? ""}
+          onChange={(e) =>
+            update({ ...value, from: e.target.value || undefined })
+          }
+          className={INPUT_CLASS}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+        To
+        <input
+          type="date"
+          data-testid={`filter-${column.id}-to`}
+          value={value.to ?? ""}
+          onChange={(e) =>
+            update({ ...value, to: e.target.value || undefined })
+          }
+          className={INPUT_CLASS}
+        />
+      </label>
+    </>
+  );
+}
+
+function SingleDateInput<TData>({
+  column,
+  value,
+}: {
+  column: Column<TData, unknown>;
+  value: Extract<DateFilterValue, { op: "on" | "before" | "after" }>;
+}) {
+  const update = (next: string) => {
+    if (!next) column.setFilterValue({ op: value.op });
+    else column.setFilterValue({ op: value.op, value: next });
+  };
+
+  return (
+    <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+      Date
+      <input
+        type="date"
+        data-testid={`filter-${column.id}-value`}
+        value={value.value ?? ""}
+        onChange={(e) => update(e.target.value)}
+        className={INPUT_CLASS}
+      />
+    </label>
+  );
 }

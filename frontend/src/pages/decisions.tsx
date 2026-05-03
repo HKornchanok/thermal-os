@@ -22,11 +22,55 @@ import { useDecisions } from "@/lib/hooks/use-decisions";
 import type { Decision, DecisionAction } from "@/lib/api";
 import {
   type ActionFilter,
-  type DateRangeFilter,
+  type DateFilterValue,
   decisionColumns,
 } from "@/features/decisions/columns";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+
+/** Day-start ISO for a YYYY-MM-DD string. */
+function dayStart(yyyyMmDd: string): string {
+  return `${yyyyMmDd}T00:00:00Z`;
+}
+
+/** Day after `yyyyMmDd` at 00:00 — used for inclusive end-of-day filters. */
+function dayAfter(yyyyMmDd: string): string {
+  const next = new Date(`${yyyyMmDd}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next.toISOString().replace(/\.\d+Z$/, "Z");
+}
+
+/**
+ * Translate a per-column date filter (with operator) into the backend's
+ * half-open `from <= recorded < to` range params.
+ *
+ * Operator → range mapping (all dates are wall-clock dates from
+ * <input type="date">, interpreted in UTC):
+ *
+ *   between { from: A, to: B } → from = startOf(A), to = startOf(B+1)
+ *                                (inclusive of both endpoints)
+ *   on      { value: D }       → from = startOf(D), to = startOf(D+1)
+ *   before  { value: D }       → to = startOf(D)        (strictly before)
+ *   after   { value: D }       → from = startOf(D+1)    (strictly after)
+ */
+function dateFilterToRange(v: DateFilterValue): { from?: string; to?: string } {
+  switch (v.op) {
+    case "between": {
+      const out: { from?: string; to?: string } = {};
+      if (v.from) out.from = dayStart(v.from);
+      if (v.to) out.to = dayAfter(v.to);
+      return out;
+    }
+    case "on":
+      return v.value
+        ? { from: dayStart(v.value), to: dayAfter(v.value) }
+        : {};
+    case "before":
+      return v.value ? { to: dayStart(v.value) } : {};
+    case "after":
+      return v.value ? { from: dayAfter(v.value) } : {};
+  }
+}
 
 /**
  * Extract the API-shaped params from TanStack Table's columnFilters array.
@@ -45,18 +89,9 @@ function paramsFromColumnFilters(filters: ColumnFiltersState): {
       const v = f.value as ActionFilter;
       if (v) result.action = v;
     } else if (f.id === "decided_at") {
-      const v = (f.value ?? {}) as DateRangeFilter;
-      // <input type="date"> gives YYYY-MM-DD. The backend filter is
-      // `decided_at >= from AND decided_at < to`, so:
-      //   from = "2026-04-15" → 2026-04-15T00:00:00Z (start of that day)
-      //   to   = "2026-04-25" → 2026-04-26T00:00:00Z (start of NEXT day,
-      //                          so April 25 is fully included)
-      if (v.from) result.from = `${v.from}T00:00:00Z`;
-      if (v.to) {
-        const next = new Date(`${v.to}T00:00:00Z`);
-        next.setUTCDate(next.getUTCDate() + 1);
-        result.to = next.toISOString().replace(/\.\d+Z$/, "Z");
-      }
+      const range = dateFilterToRange(f.value as DateFilterValue);
+      if (range.from) result.from = range.from;
+      if (range.to) result.to = range.to;
     }
   }
 
