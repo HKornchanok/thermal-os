@@ -173,3 +173,11 @@ export interface Alert {
   value: number;
   threshold: number;
 }
+
+export interface ChatRequest {
+  message: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+}

@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     alerts_list,
+    chat,
     compare,
     decisions_list,
     energy,
@@ -20,4 +21,5 @@ urlpatterns = [
     path("decisions/", decisions_list, name="decisions_list"),
     path("energy/compare/", compare, name="energy_compare"),
     path("alerts/", alerts_list, name="alerts_list"),
+    path("chat/", chat, name="chat"),
 ]
