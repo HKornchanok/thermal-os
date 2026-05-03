@@ -7,7 +7,6 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 
-import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table/data-table";
 import {
   extractDateRangeFromColumnFilters,
@@ -67,7 +66,6 @@ export default function DecisionsPage() {
 
   const count = data?.count ?? 0;
   const totalPages = data?.total_pages ?? 0;
-  const hasActiveFilter = columnFilters.length > 0;
 
   const setPageSizeAndResetPage = (next: number) => {
     setPageSize(next);
@@ -85,26 +83,6 @@ export default function DecisionsPage() {
         <p className="text-xs text-muted-foreground">
           {count.toLocaleString()} decision{count === 1 ? "" : "s"} in range
         </p>
-      </div>
-
-      {/* Filter-state controls live in the page; per-page, refreshing
-          indicator, and pagination are in DataTable's footer.
-          min-h-8 reserves the Clear button height so the table doesn't
-          shift when the button shows/hides. */}
-      <div className="mt-4 flex min-h-8 flex-wrap items-center gap-3">
-        {hasActiveFilter && (
-          <Button
-            data-testid="clear-filters"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              table.resetColumnFilters();
-              setPage(1);
-            }}
-          >
-            Clear filters
-          </Button>
-        )}
       </div>
 
       <div className="mt-4 rounded-lg border border-border bg-card text-card-foreground">
@@ -136,6 +114,7 @@ export default function DecisionsPage() {
             paginationStatus: "decisions-pagination-status",
             prev: "decisions-prev",
             next: "decisions-next",
+            clearFilters: "clear-filters",
           }}
         />
       </div>

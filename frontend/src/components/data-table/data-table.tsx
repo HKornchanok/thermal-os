@@ -86,6 +86,7 @@ interface DataTableProps<TData, TValue> {
     paginationStatus?: string;
     prev?: string;
     next?: string;
+    clearFilters?: string;
   };
 
   /** Override the default 120px minimum cell width if needed. */
@@ -198,6 +199,7 @@ export function DataTable<TData, TValue>({
 
       {pagination && (
         <DataTableFooter
+          table={table}
           pagination={pagination}
           isFetching={isFetching}
           testIds={testIds}
@@ -207,11 +209,13 @@ export function DataTable<TData, TValue>({
   );
 }
 
-function DataTableFooter({
+function DataTableFooter<TData>({
+  table,
   pagination,
   isFetching,
   testIds,
 }: {
+  table: TanStackTable<TData>;
   pagination: PaginationProps;
   isFetching?: boolean;
   testIds?: DataTableProps<unknown, unknown>["testIds"];
@@ -220,6 +224,7 @@ function DataTableFooter({
     pagination;
   const canPrev = page > 1;
   const canNext = page < totalPages;
+  const hasActiveFilter = table.getState().columnFilters.length > 0;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-2 text-xs text-muted-foreground">
@@ -249,6 +254,19 @@ function DataTableFooter({
             <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden />
             <span>Refreshing</span>
           </span>
+        )}
+        {hasActiveFilter && (
+          // table.resetColumnFilters() fires through onColumnFiltersChange,
+          // so the page's wrapped setter (which also resets to page 1)
+          // runs automatically — no separate "and reset page" prop needed.
+          <Button
+            data-testid={testIds?.clearFilters ?? "clear-filters"}
+            variant="ghost"
+            size="sm"
+            onClick={() => table.resetColumnFilters()}
+          >
+            Clear filters
+          </Button>
         )}
       </div>
 
