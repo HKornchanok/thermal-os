@@ -31,7 +31,15 @@ export default function Login() {
       return;
     }
     if (res?.ok) {
-      router.push("/");
+      // Bounce to the originally-requested URL the AuthGate captured,
+      // falling back to the Overview page when the user came straight
+      // to /login.
+      const callback = router.query.callbackUrl;
+      const target =
+        typeof callback === "string" && callback.startsWith("/")
+          ? callback
+          : "/";
+      router.push(target);
     }
   }
 

@@ -1,7 +1,6 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useSession } from "next-auth/react";
-import { useEffect } from "react";
 
 import { AlertBanner } from "@/components/dashboard/alert-banner";
 import { ErrorState, LoadingState } from "@/components/dashboard/states";
@@ -13,23 +12,14 @@ import { useMachines } from "@/lib/hooks/use-machines";
 import { fmtNum } from "@/lib/utils";
 
 export default function OverviewPage() {
-  const { data: session, status } = useSession();
+  // AuthGate in _app.tsx handles unauthenticated redirects + the loading
+  // spinner before this page mounts, so `session` is always present here.
+  const { data: session } = useSession();
   const router = useRouter();
-
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.replace("/login");
-    }
-  }, [status, router]);
 
   const summaryQuery = useBuildingSummary();
   const alertsQuery = useAlerts();
   const machinesQuery = useMachines();
-
-  if (status === "loading") {
-    return <LoadingState message="Loading session…" />;
-  }
-  if (!session) return null;
 
   const summary = summaryQuery.data;
   const alerts = alertsQuery.data ?? [];
@@ -64,7 +54,7 @@ export default function OverviewPage() {
         <h1 className="mt-0 text-2xl font-semibold">Overview</h1>
         <p className="text-xs text-muted-foreground">
           Signed in as{" "}
-          <strong className="text-foreground">{session.user?.name}</strong>
+          <strong className="text-foreground">{session?.user?.name}</strong>
         </p>
       </div>
 

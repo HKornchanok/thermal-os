@@ -167,7 +167,10 @@ export function AreaChart<TData extends Record<string, any>>({
             stroke={CHART_GRID_STROKE}
             tickLine={false}
             axisLine={false}
-            width={48}
+            // 64px fits 4-digit fmtNum values with thousands separator
+            // (e.g. "1,650 kW") at the chart's mono-10px tick font; the
+            // previous 48px clipped the leading digit on /compare.
+            width={64}
             tickFormatter={yTickFormatter}
           />
 
