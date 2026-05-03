@@ -77,10 +77,12 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      // Fixed h-10 (40px) so every header row is the same height, no matter
-      // what's inside the cell (label only, label + funnel button, etc.).
-      // align-middle centres the cell content vertically within that 40px.
-      "h-10 px-2 text-left align-middle text-xs font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+      // Fixed 50px so every header row is the same height, no matter what's
+      // inside the cell (label only, label + funnel button, etc.). 50px gives
+      // comfortable breathing room around the funnel button (28px) without
+      // looking sparse with single-line labels. align-middle centres the
+      // content vertically within the 50px row.
+      "h-[50px] px-2 text-left align-middle text-xs font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
       className
     )}
     {...props}
