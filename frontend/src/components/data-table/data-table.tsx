@@ -117,7 +117,16 @@ export function DataTable<TData, TValue>({
                   // Per-column meta.minWidth wins over the table-wide
                   // default; inline `min-width` style takes precedence
                   // over the Tailwind class.
-                  className={cn(cellMinWidthClass)}
+                  //
+                  // The `after:` pseudo paints a thin vertical separator
+                  // on the cell's right edge, centred vertically and 50%
+                  // of the cell height (top-1/4 + h-1/2). `last:after:hidden`
+                  // suppresses it on the last column since there's no
+                  // next column to separate from.
+                  className={cn(
+                    "relative after:absolute after:right-0 after:top-1/4 after:h-1/2 after:w-px after:bg-border after:content-[''] last:after:hidden",
+                    cellMinWidthClass
+                  )}
                   style={explicit ? { minWidth: `${explicit}px` } : undefined}
                 >
                   {header.isPlaceholder
