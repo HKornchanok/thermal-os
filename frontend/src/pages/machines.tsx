@@ -117,6 +117,28 @@ export default function MachinesPage() {
     [sensorPoints]
   );
 
+  // "Now" reference line position — snapped to the closest existing
+  // bucket. Recharts uses a categorical X axis when xKey holds string
+  // bucket labels, so ReferenceLine `x={...}` only positions correctly
+  // when the value EXACTLY matches a data point's bucket. Walking the
+  // points and picking the one nearest to wall-clock NOW gives a
+  // visually correct line at the latest 5-minute slot. Stable while
+  // switching metric tabs (depends only on sensorPoints + selectedId).
+  const nowBucketIso = useMemo(() => {
+    if (sensorPoints.length === 0) return undefined;
+    const now = Date.now();
+    let best = sensorPoints[0].bucket;
+    let bestDelta = Math.abs(new Date(best).getTime() - now);
+    for (const p of sensorPoints) {
+      const delta = Math.abs(new Date(p.bucket).getTime() - now);
+      if (delta < bestDelta) {
+        best = p.bucket;
+        bestDelta = delta;
+      }
+    }
+    return best;
+  }, [sensorPoints]);
+
   return (
     <>
       <Head>
@@ -240,6 +262,7 @@ export default function MachinesPage() {
                   },
                 ]}
                 xTicks={hourlyTicks}
+                nowLine={nowBucketIso}
                 xTickFormatter={(v) => formatBucketTime(v as string)}
                 yTickFormatter={(v) =>
                   `${(v as number).toFixed(metric === "power_kw" ? 0 : 1)}${
