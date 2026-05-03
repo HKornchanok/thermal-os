@@ -26,6 +26,10 @@ node_modules/
 out/
 .turbo/
 
+# Husky auto-generated bootstrap scripts (committed hook scripts live
+# alongside, e.g. frontend/.husky/pre-commit, and ARE tracked).
+.husky/_/
+
 # IDE
 .vscode/
 .idea/
