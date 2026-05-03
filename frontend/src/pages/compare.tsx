@@ -1,5 +1,5 @@
 import Head from "next/head";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { AreaChart } from "@/components/dashboard/area-chart";
 import { ErrorState, LoadingState } from "@/components/dashboard/states";
@@ -38,6 +38,19 @@ function isoToLocalDate(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Add `n` days to a YYYY-MM-DD string and return the same format. */
+function addDays(yyyyMmDd: string, n: number): string {
+  const [y, m, d] = yyyyMmDd.split("-").map(Number);
+  const dt = new Date(y, m - 1, d + n);
+  const pad = (x: number) => String(x).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+}
+
+/** Min of two YYYY-MM-DD strings (lexical order works for ISO dates). */
+function minDateStr(a: string, b: string): string {
+  return a < b ? a : b;
 }
 
 /**
@@ -83,19 +96,63 @@ export default function ComparePage() {
   });
   const compare = compareQuery.data;
 
-  const usingDefaults = !aFrom && !aTo && !bFrom && !bTo;
-
-  // Echo the server-resolved boundaries back into the date inputs so
-  // the user can see what "default" actually means.
-  const resolved = useMemo(() => {
-    if (!compare) return null;
+  // Each period stays inside its half of the seed window — Period A
+  // (Before AI) is bounded to the manual period, Period B (After AI)
+  // to the AI period. Without this, a user could pick a Period A date
+  // that lives inside the AI window (or vice-versa) and the comparison
+  // would silently stop being a manual-vs-AI comparison.
+  const periodARange = useMemo(() => {
+    if (!compare?.before) return null;
     return {
-      aFrom: compare.before ? isoToLocalDate(compare.before.from) : "",
-      aTo: compare.before ? isoToLocalDate(compare.before.to) : "",
-      bFrom: compare.after ? isoToLocalDate(compare.after.from) : "",
-      bTo: compare.after ? isoToLocalDate(compare.after.to) : "",
+      min: isoToLocalDate(compare.before.from),
+      max: isoToLocalDate(compare.before.to),
     };
   }, [compare]);
+  const periodBRange = useMemo(() => {
+    if (!compare?.after) return null;
+    return {
+      min: isoToLocalDate(compare.after.from),
+      max: isoToLocalDate(compare.after.to),
+    };
+  }, [compare]);
+
+  // Canonical default ranges — the brief frames the comparison as the
+  // first 3 days of manual against the first 3 days of AI. Equal-length
+  // windows make the savings_pct delta meaningful (comparing 3 days to
+  // 4 days would skew the average against the longer side). We pin the
+  // defaults to (range.min, range.min + 2 days), clamped to range.max
+  // so a shorter seed window doesn't over-extend.
+  const defaults = useMemo(() => {
+    if (!periodARange || !periodBRange) return null;
+    return {
+      aFrom: periodARange.min,
+      aTo: minDateStr(addDays(periodARange.min, 2), periodARange.max),
+      bFrom: periodBRange.min,
+      bTo: minDateStr(addDays(periodBRange.min, 2), periodBRange.max),
+    };
+  }, [periodARange, periodBRange]);
+
+  // First-load: once the compare endpoint responds with its resolved
+  // boundaries, populate the inputs with the canonical defaults. We
+  // gate on `initialised` so the user's own picks aren't clobbered if
+  // the underlying compare response refreshes (e.g. seed re-runs while
+  // they're on the page).
+  const [initialised, setInitialised] = useState(false);
+  useEffect(() => {
+    if (initialised || !defaults) return;
+    setAFrom(defaults.aFrom);
+    setATo(defaults.aTo);
+    setBFrom(defaults.bFrom);
+    setBTo(defaults.bTo);
+    setInitialised(true);
+  }, [initialised, defaults]);
+
+  const usingCanonicalDefaults =
+    !!defaults &&
+    aFrom === defaults.aFrom &&
+    aTo === defaults.aTo &&
+    bFrom === defaults.bFrom &&
+    bTo === defaults.bTo;
 
   // Once compare resolves, fetch the per-period 1h timeseries so we can
   // overlay them as lines. We use the server-resolved ISO boundaries
@@ -118,10 +175,17 @@ export default function ComparePage() {
   );
 
   const reset = () => {
-    setAFrom("");
-    setATo("");
-    setBFrom("");
-    setBTo("");
+    if (!defaults) {
+      setAFrom("");
+      setATo("");
+      setBFrom("");
+      setBTo("");
+      return;
+    }
+    setAFrom(defaults.aFrom);
+    setATo(defaults.aTo);
+    setBFrom(defaults.bFrom);
+    setBTo(defaults.bTo);
   };
 
   const isChartLoading =
@@ -138,18 +202,18 @@ export default function ComparePage() {
 
       <div className="flex items-baseline justify-between gap-4">
         <h1 className="mt-0 text-2xl font-semibold">Before / After</h1>
-        {!usingDefaults && (
+        {!usingCanonicalDefaults && initialised && (
           <Button variant="outline" size="sm" onClick={reset}>
             Reset to defaults
           </Button>
         )}
       </div>
       <p className="mt-1 text-sm text-muted-foreground">
-        Compare average building power between two periods. Defaults split the
-        seeded window in half — Period A covers manual operations, Period B
-        covers automated AI control. The chart overlays the two periods on a
-        shared "hours from period start" axis so curves can be compared directly
-        even when the periods have different absolute timestamps.
+        Compare average building power between two equal-length periods.
+        Defaults to the first 3 days of manual operations vs. the first 3 days
+        of AI control — same window length, so the savings_pct delta is directly
+        comparable. The chart overlays both periods on a shared "hours from
+        period start" axis so the curves line up regardless of absolute date.
       </p>
 
       {/* Period pickers */}
@@ -158,8 +222,8 @@ export default function ComparePage() {
           label="Period A — Before AI"
           from={aFrom}
           to={aTo}
-          fromPlaceholder={resolved?.aFrom}
-          toPlaceholder={resolved?.aTo}
+          minDate={periodARange?.min}
+          maxDate={periodARange?.max}
           onFromChange={setAFrom}
           onToChange={setATo}
           testIdPrefix="period-a"
@@ -168,8 +232,8 @@ export default function ComparePage() {
           label="Period B — After AI"
           from={bFrom}
           to={bTo}
-          fromPlaceholder={resolved?.bFrom}
-          toPlaceholder={resolved?.bTo}
+          minDate={periodBRange?.min}
+          maxDate={periodBRange?.max}
           onFromChange={setBFrom}
           onToChange={setBTo}
           testIdPrefix="period-b"
@@ -296,8 +360,8 @@ function PeriodPicker({
   label,
   from,
   to,
-  fromPlaceholder,
-  toPlaceholder,
+  minDate,
+  maxDate,
   onFromChange,
   onToChange,
   testIdPrefix,
@@ -305,8 +369,10 @@ function PeriodPicker({
   label: string;
   from: string;
   to: string;
-  fromPlaceholder?: string;
-  toPlaceholder?: string;
+  /** Earliest selectable date (this period's window start). */
+  minDate?: string;
+  /** Latest selectable date (this period's window end). */
+  maxDate?: string;
   onFromChange: (v: string) => void;
   onToChange: (v: string) => void;
   testIdPrefix: string;
@@ -320,34 +386,31 @@ function PeriodPicker({
           <input
             type="date"
             value={from}
-            placeholder={fromPlaceholder}
+            min={minDate}
+            max={to || maxDate}
             onChange={(e) => onFromChange(e.target.value)}
             data-testid={`${testIdPrefix}-from`}
             className="rounded border border-border bg-background px-2 py-1 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
-          {!from && fromPlaceholder && (
-            <span className="font-mono text-[10px] text-muted-foreground">
-              default {fromPlaceholder}
-            </span>
-          )}
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           To
           <input
             type="date"
             value={to}
-            placeholder={toPlaceholder}
+            min={from || minDate}
+            max={maxDate}
             onChange={(e) => onToChange(e.target.value)}
             data-testid={`${testIdPrefix}-to`}
             className="rounded border border-border bg-background px-2 py-1 font-mono text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           />
-          {!to && toPlaceholder && (
-            <span className="font-mono text-[10px] text-muted-foreground">
-              default {toPlaceholder}
-            </span>
-          )}
         </label>
       </div>
+      {(minDate || maxDate) && (
+        <p className="mt-2 font-mono text-[10px] text-muted-foreground">
+          Available data: {minDate} → {maxDate}
+        </p>
+      )}
     </div>
   );
 }
