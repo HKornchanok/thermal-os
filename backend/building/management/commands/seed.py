@@ -115,6 +115,91 @@ AI_SCHEDULE: dict[str, tuple[int, int]] = {
 MANUAL_WINDOW = (6 * 60, 22 * 60)
 
 
+# ---------------------------------------------------------------------------
+# Day plans — per-AI-day variation. The brief calls for "~8–12 decisions per
+# day", but if every day uses the IDENTICAL 10 events at the IDENTICAL minute
+# with the IDENTICAL setpoint values, the AI looks like a cron job, not a
+# learning system. Real AI control varies its actions day to day in response
+# to weather and occupancy.
+#
+# A DayPlan is the single source of truth for one AI day: when AC-S3 turns
+# off, what setpoint AC-L1 drops to in the morning, etc. The plan is
+# consulted by BOTH the sensor reading generator AND the decision generator,
+# so the chart shows the change at the same minute the decision is logged.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DayPlan:
+    # Outdoor peak (°C) for the day's sinusoidal temperature curve.
+    # Real Bangkok varies 32–36°C peak in dry season.
+    outdoor_peak_c: float
+
+    # AC-L1 lobby setpoint schedule.
+    ac_l1_morning_drop_min: int   # canonical 09:30 ± 15 min
+    ac_l1_morning_setpoint: float  # canonical 24.0 ± 0.5
+    ac_l1_evening_relax_min: int  # canonical 17:00 ± 15 min
+    ac_l1_evening_setpoint: float  # canonical 26.0 ± 0.5
+    ac_l1_night_setpoint: float    # canonical 27.0 ± 0.5 (always at 22:00)
+
+    # AC-L2/L3 main floors.
+    ac_main_noon_min: int          # canonical 12:00 ± 15 min
+    ac_main_noon_setpoint: float   # canonical 24.5 ± 0.5
+    ac_main_evening_min: int       # canonical 17:00 ± 15 min (relax to 26)
+    ac_main_evening_setpoint: float
+
+    # AC-S3 meeting rooms — when they go quiet.
+    ac_s3_off_min: int             # canonical 14:30 ± 30 min
+
+    # Office floors (AC-S1, AC-S2, AC-S4) and main floors evening shutdown.
+    office_close_min: int          # canonical 18:30 ± 15 min
+    main_evening_off_min: int      # canonical 19:00 ± 15 min
+
+    # Optional events:
+    # On hot days, AI tightens an extra setpoint at ~11:00.
+    extra_morning_tighten: bool
+    # On cool days (rare), AI skips the morning lobby drop entirely.
+    skip_morning_drop: bool
+
+
+def _make_day_plan(rng: random.Random) -> DayPlan:
+    """Generate one day's plan from a per-day RNG. Times jitter ±15-30 min;
+    setpoints jitter ±0.5°C. Conditional events (`extra_morning_tighten`,
+    `skip_morning_drop`) are gated on the day's outdoor peak so the
+    decision narrative reads like a response to the weather, not noise."""
+    outdoor_peak_c = round(rng.uniform(32.0, 36.0), 1)
+    return DayPlan(
+        outdoor_peak_c=outdoor_peak_c,
+        ac_l1_morning_drop_min=9 * 60 + 30 + rng.randint(-15, 15),
+        ac_l1_morning_setpoint=round(rng.uniform(23.5, 24.5) * 2) / 2,
+        ac_l1_evening_relax_min=17 * 60 + rng.randint(-15, 15),
+        ac_l1_evening_setpoint=round(rng.uniform(25.5, 26.5) * 2) / 2,
+        ac_l1_night_setpoint=round(rng.uniform(26.5, 27.5) * 2) / 2,
+        ac_main_noon_min=12 * 60 + rng.randint(-15, 15),
+        ac_main_noon_setpoint=round(rng.uniform(24.0, 25.0) * 2) / 2,
+        ac_main_evening_min=17 * 60 + rng.randint(-15, 15),
+        ac_main_evening_setpoint=round(rng.uniform(25.5, 26.5) * 2) / 2,
+        ac_s3_off_min=14 * 60 + 30 + rng.randint(-30, 30),
+        office_close_min=18 * 60 + 30 + rng.randint(-15, 15),
+        main_evening_off_min=19 * 60 + rng.randint(-15, 15),
+        # Extra tighten when day is forecast hot (>34.5°C).
+        extra_morning_tighten=outdoor_peak_c > 34.5,
+        # Skip morning drop on the cooler days (<32.8°C); rare in Bangkok.
+        skip_morning_drop=outdoor_peak_c < 32.8,
+    )
+
+
+# Module-level cache, populated by Command.handle for the AI period.
+# Manual days never look this up; AI days look up by date().
+_DAY_PLANS: dict = {}
+
+
+def _plan_for(dt: datetime) -> DayPlan | None:
+    """Return the day plan for the timestamp's calendar day, or None for
+    timestamps outside the AI period (manual days)."""
+    return _DAY_PLANS.get(dt.date())
+
+
 def _is_on(m: MachineCtx, dt: datetime, period: str) -> bool:
     """True if the machine should be ON at the given local timestamp."""
     if m.is_critical:
@@ -122,11 +207,24 @@ def _is_on(m: MachineCtx, dt: datetime, period: str) -> bool:
     minute_of_day = dt.hour * 60 + dt.minute
     if period == "manual":
         start, end = MANUAL_WINDOW
-    else:
-        sched = AI_SCHEDULE.get(m.name)
-        if sched is None:
-            return False
-        start, end = sched
+        return start <= minute_of_day < end
+
+    sched = AI_SCHEDULE.get(m.name)
+    if sched is None:
+        return False
+    start, end = sched
+
+    # Day-plan overrides — let each AI day shift its own off times so the
+    # schedule matches what the decision log says happened that day.
+    plan = _plan_for(dt)
+    if plan is not None:
+        if m.name == "AC-S3":
+            end = plan.ac_s3_off_min
+        elif m.name in ("AC-S1", "AC-S2", "AC-S4"):
+            end = plan.office_close_min
+        elif m.name in ("AC-L2", "AC-L3", "FAN-02", "FAN-03", "FAN-04"):
+            end = plan.main_evening_off_min
+
     return start <= minute_of_day < end
 
 
@@ -142,16 +240,16 @@ OUTDOOR_HIGH_C = 34.0
 def _outdoor_temp(dt: datetime) -> float:
     """Return outdoor temperature (°C) at this timestamp.
 
-    Model: amplitude (HIGH-LOW)/2 sinusoid centred on (HIGH+LOW)/2. Phase is
-    set so the trough lands at 06:00 and the peak at 18:00 of the SAME local
-    day — closer to a tropical climate than a Northern-hemisphere "afternoon
-    peak" which would land at 14:00. Either way the curve drives load
-    realistically; the exact peak hour matters less than the swing magnitude.
+    Daily peak comes from the day's `DayPlan` when one exists (AI period),
+    falling back to the manual baseline of 34°C for days that don't have
+    a plan. Phase is set so the trough lands at 06:00 and the peak at
+    18:00 of the SAME local day — close to tropical Bangkok.
     """
+    plan = _plan_for(dt)
+    high_c = plan.outdoor_peak_c if plan is not None else OUTDOOR_HIGH_C
     hours = dt.hour + dt.minute / 60.0
-    centre = (OUTDOOR_HIGH_C + OUTDOOR_LOW_C) / 2.0
-    amplitude = (OUTDOOR_HIGH_C - OUTDOOR_LOW_C) / 2.0
-    # cos peaks at hours=18, troughs at hours=6
+    centre = (high_c + OUTDOOR_LOW_C) / 2.0
+    amplitude = (high_c - OUTDOOR_LOW_C) / 2.0
     phase = 2 * math.pi * (hours - 18) / 24.0
     return centre + amplitude * math.cos(phase)
 
@@ -165,7 +263,12 @@ def _outdoor_temp(dt: datetime) -> float:
 
 
 def _setpoint_for(m: MachineCtx, dt: datetime, period: str) -> float | None:
-    """AC setpoint at this time, given the period. Returns None for fans."""
+    """AC setpoint at this time, given the period. Returns None for fans.
+
+    Day-plan aware in the AI period — each day's setpoint targets and
+    transition times come from `_plan_for(dt)`, so the chart shows the
+    same value the AIDecision row says was set.
+    """
     if m.machine_type == Machine.FAN:
         return None
 
@@ -173,33 +276,40 @@ def _setpoint_for(m: MachineCtx, dt: datetime, period: str) -> float | None:
         # Stuck at 25°C — the brief's "no setpoint adjustments during the day".
         return 25.0
 
-    # AI period — zone- and time-aware. Mirrors the brief's Decision Examples.
-    hour = dt.hour
-
     if m.name == "AC-S5":
         # Server Room — held cold 22°C all day, the natural target for hot kit.
         return 22.0
 
+    plan = _plan_for(dt)
+    minute_of_day = dt.hour * 60 + dt.minute
+
     if m.name == "AC-L1":
-        # Lobby — relaxes to 26°C after 17:00 (occupancy dropping), 27°C after
-        # 22:00 night mode. Drops to 24°C at 09:30 when outdoor temp climbs —
-        # the timestamp must match the SET_TEMP decision logged at 09:30.
-        minute_of_day = hour * 60 + dt.minute
-        if hour >= 22:
-            return 27.0
-        if hour >= 17:
-            return 26.0
-        if minute_of_day >= 9 * 60 + 30:
-            return 24.0
+        # Lobby — sequence: 25°C overnight → drops at the day's morning_drop
+        # minute → relaxes at evening_relax → night mode at 22:00. When the
+        # day plan says "skip morning drop" (cool day), 25°C holds until the
+        # evening relax.
+        if plan is not None:
+            if minute_of_day >= 22 * 60:
+                return plan.ac_l1_night_setpoint
+            if minute_of_day >= plan.ac_l1_evening_relax_min:
+                return plan.ac_l1_evening_setpoint
+            if (
+                not plan.skip_morning_drop
+                and minute_of_day >= plan.ac_l1_morning_drop_min
+            ):
+                return plan.ac_l1_morning_setpoint
+            return 25.0
+        # No plan (shouldn't happen in AI period, defensive default).
         return 25.0
 
     if m.name in ("AC-L2", "AC-L3"):
-        # Floors 1–6 — adjusted to 24.5°C at noon peak occupancy, 26°C after
-        # 17:00 relaxed.
-        if hour >= 17:
-            return 26.0
-        if 12 <= hour < 17:
-            return 24.5
+        # Floors 1–6 — sequence: 25°C → noon tighten → evening relax.
+        if plan is not None:
+            if minute_of_day >= plan.ac_main_evening_min:
+                return plan.ac_main_evening_setpoint
+            if minute_of_day >= plan.ac_main_noon_min:
+                return plan.ac_main_noon_setpoint
+            return 25.0
         return 25.0
 
     # Small ACs in offices — held at 24°C through office hours.
@@ -296,22 +406,27 @@ def _gen_reading(m: MachineCtx, dt: datetime, period: str) -> SensorReading:
 # ---------------------------------------------------------------------------
 
 
-def _gen_day_decisions(machines: dict[str, MachineCtx], day_start: datetime) -> list[AIDecision]:
-    """Build one AI day's decision log: ~10 events tracking the brief's
-    Decision Examples timeline. The brief specifies "~8–12 decisions per
-    day"; we pick the canonical 10 — one per narrative beat — and let
-    each decision target the single representative machine for that beat
-    (rather than spamming one row per fellow machine).
+def _gen_day_decisions(
+    machines: dict[str, MachineCtx],
+    day_start: datetime,
+    plan: DayPlan,
+) -> list[AIDecision]:
+    """Build one AI day's decision log: 8–12 events whose times, setpoints,
+    and conditional skips/extras come from the day's `plan`. Every value
+    here is also what the sensor data reflects at the same minute — see
+    `_setpoint_for` and `_is_on` which read the SAME plan.
 
-    The timestamps and setpoint values intentionally match what the
-    sensor schedule (AI_SCHEDULE) and `_setpoint_for` produce, so
-    Somchai sees the chart change at the same minute the decision log
-    records the change.
+    Per-day variation:
+      - times jitter ±15-30 min from canonical
+      - setpoints jitter ±0.5°C
+      - hot day (peak >34.5°C) adds an extra 11:00 SET_TEMP tighten
+      - cool day (peak <32.8°C) skips the morning SET_TEMP entirely
     """
     out: list[AIDecision] = []
 
-    def at(hour: int, minute: int) -> datetime:
-        return day_start.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    def at_min(minute_of_day: int) -> datetime:
+        h, m = divmod(minute_of_day, 60)
+        return day_start.replace(hour=h, minute=m, second=0, microsecond=0)
 
     def add(dt: datetime, machine_name: str, action: str, value: float | None, reason: str) -> None:
         m = machines.get(machine_name)
@@ -322,49 +437,56 @@ def _gen_day_decisions(machines: dict[str, MachineCtx], day_start: datetime) -> 
             value=value, reason=reason,
         ))
 
-    # 06:00 — Building opening, pre-cool the lobby. (AC-L2/L3 also turn on
-    # at 06:00 per their AI_SCHEDULE; we log only the canonical Zone A
-    # event to keep the count to ~10 — operators don't need each fellow
-    # machine logged separately.)
-    add(at(6, 0), "AC-L1", AIDecision.TURN_ON, None,
-        "Building opening — pre-cool Zone A (lobby) and Floors 1-6")
+    # 06:00 — Building opening, pre-cool. (AC-L2/L3 also turn on per their
+    # AI_SCHEDULE; we log the Zone A event as the canonical morning beat.)
+    add(at_min(6 * 60), "AC-L1", AIDecision.TURN_ON, None,
+        f"Building opening — pre-cool Zone A & Floors 1-6 (forecast peak {plan.outdoor_peak_c}°C)")
 
     # 06:15 — Start ventilation across the building.
-    add(at(6, 15), "FAN-02", AIDecision.TURN_ON, None,
+    add(at_min(6 * 60 + 15), "FAN-02", AIDecision.TURN_ON, None,
         "Start ventilation FAN-02..04 for occupancy")
 
     # 07:00 — Office hours start; office floors come online together.
-    add(at(7, 0), "AC-S1", AIDecision.TURN_ON, None,
+    add(at_min(7 * 60), "AC-S1", AIDecision.TURN_ON, None,
         "Office hours starting — AC-S1, AC-S2, AC-S4 online")
 
-    # 09:30 — Outdoor climbing past 30°C, drop lobby setpoint.
-    outdoor_morning = round(_outdoor_temp(at(9, 30)), 1)
-    add(at(9, 30), "AC-L1", AIDecision.SET_TEMP, 24.0,
-        f"Adjusted from 25°C to 24°C — outdoor temp rising to {outdoor_morning}°C")
+    # Morning lobby setpoint drop — skipped on cooler days.
+    if not plan.skip_morning_drop:
+        morning_dt = at_min(plan.ac_l1_morning_drop_min)
+        outdoor_now = round(_outdoor_temp(morning_dt), 1)
+        add(morning_dt, "AC-L1", AIDecision.SET_TEMP, plan.ac_l1_morning_setpoint,
+            f"Adjusted from 25°C to {plan.ac_l1_morning_setpoint}°C — outdoor temp rising to {outdoor_now}°C")
 
-    # 12:00 — Peak occupancy, tighten Floors 1-6 setpoint.
-    add(at(12, 0), "AC-L2", AIDecision.SET_TEMP, 24.5,
-        "Adjusted to 24.5°C — peak occupancy period (AC-L2, AC-L3)")
+    # Hot-day extra: AI tightens main floors at 11:00 ahead of peak.
+    if plan.extra_morning_tighten:
+        add(at_min(11 * 60), "AC-L2", AIDecision.SET_TEMP,
+            round(plan.ac_main_noon_setpoint - 0.5, 1),
+            f"Pre-tighten Floors 1-6 — hot day forecast ({plan.outdoor_peak_c}°C)")
 
-    # 14:30 — Meeting rooms empty, shut Floor 3.
-    add(at(14, 30), "AC-S3", AIDecision.TURN_OFF, None,
+    # Noon — main floors tighten at the day's noon time.
+    add(at_min(plan.ac_main_noon_min), "AC-L2", AIDecision.SET_TEMP, plan.ac_main_noon_setpoint,
+        f"Adjusted Floors 1-6 to {plan.ac_main_noon_setpoint}°C — peak occupancy period")
+
+    # AC-S3 meeting rooms shut down (varies daily ±30 min).
+    add(at_min(plan.ac_s3_off_min), "AC-S3", AIDecision.TURN_OFF, None,
         "Meeting rooms empty — no occupancy detected")
 
-    # 17:00 — Occupancy dropping, relax lobby + main floors.
-    add(at(17, 0), "AC-L1", AIDecision.SET_TEMP, 26.0,
-        "Relaxed lobby + Floors 1-6 to 26°C — occupancy dropping")
+    # Evening relax for the lobby (and main floors implicitly).
+    add(at_min(plan.ac_l1_evening_relax_min), "AC-L1", AIDecision.SET_TEMP, plan.ac_l1_evening_setpoint,
+        f"Relaxed lobby + Floors 1-6 to {plan.ac_l1_evening_setpoint}°C — occupancy dropping")
 
-    # 18:30 — Office floors close.
-    add(at(18, 30), "AC-S1", AIDecision.TURN_OFF, None,
+    # Office floors close.
+    add(at_min(plan.office_close_min), "AC-S1", AIDecision.TURN_OFF, None,
         "Office floors closing — AC-S1, AC-S2, AC-S4")
 
-    # 19:00 — Evening shutdown for main floors and ventilation.
-    add(at(19, 0), "AC-L2", AIDecision.TURN_OFF, None,
+    # Evening shutdown for main floors and ventilation.
+    add(at_min(plan.main_evening_off_min), "AC-L2", AIDecision.TURN_OFF, None,
         "Evening shutdown — AC-L2, AC-L3, FAN-02..04")
 
-    # 22:00 — Lobby night mode.
-    add(at(22, 0), "AC-L1", AIDecision.SET_TEMP, 27.0,
-        "Relaxed to 27°C — lobby night mode")
+    # 22:00 — Lobby night mode (always at 22:00 sharp; only the target
+    # setpoint varies day-to-day).
+    add(at_min(22 * 60), "AC-L1", AIDecision.SET_TEMP, plan.ac_l1_night_setpoint,
+        f"Relaxed to {plan.ac_l1_night_setpoint}°C — lobby night mode")
 
     return out
 
@@ -499,10 +621,25 @@ class Command(BaseCommand):
         # endpoint always has both sides populated.
         manual_end = min(start + timedelta(days=3), end)
 
+        # Build per-day plans for the AI period. Each day gets its own
+        # RNG seeded by (global_seed, day_offset) so re-runs produce the
+        # same data. Plans are stored in the module-level _DAY_PLANS dict
+        # so reading + decision generators share a single source of
+        # truth without threading the parameter through every helper.
+        _DAY_PLANS.clear()
+        ai_day = manual_end
+        ai_day_index = 0
+        while ai_day < end:
+            day_rng = random.Random(options["seed"] * 100 + ai_day_index + 1)
+            _DAY_PLANS[ai_day.date()] = _make_day_plan(day_rng)
+            ai_day += timedelta(days=1)
+            ai_day_index += 1
+
         self.stdout.write(
             f"Seeding {days} days of readings: "
             f"manual {start.date()} → {manual_end.date()}, "
-            f"AI {manual_end.date()} → {end.date()}"
+            f"AI {manual_end.date()} → {end.date()} "
+            f"({len(_DAY_PLANS)} day plans)"
         )
 
         readings = self._gen_readings(list(machines.values()), start, manual_end, end)
@@ -579,11 +716,14 @@ class Command(BaseCommand):
         ai_start: datetime,
         ai_end: datetime,
     ) -> list[AIDecision]:
-        """One day's worth of ~17 events for each AI day in the window."""
+        """8–12 decisions per AI day, driven by each day's plan in
+        `_DAY_PLANS`. Plans are populated by `handle()` before this runs."""
         out: list[AIDecision] = []
         day = ai_start
         while day < ai_end:
-            out.extend(_gen_day_decisions(machines, day))
+            plan = _DAY_PLANS.get(day.date())
+            if plan is not None:
+                out.extend(_gen_day_decisions(machines, day, plan))
             day += timedelta(days=1)
         return out
 
