@@ -1,19 +1,15 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { signOut, useSession } from "next-auth/react";
 import {
   ArrowLeftRight,
   Bot,
   Cpu,
   LayoutDashboard,
   ListChecks,
-  LogOut,
   Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -35,7 +31,6 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Sidebar() {
   const router = useRouter();
-  const { data: session } = useSession();
 
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
@@ -69,31 +64,6 @@ export function Sidebar() {
           );
         })}
       </nav>
-
-      <div className="flex flex-col gap-2 border-t border-sidebar-border p-3">
-        {session?.user?.name && (
-          <p
-            className="truncate text-xs text-muted-foreground"
-            title={session.user.name}
-            data-testid="sidebar-user"
-          >
-            {session.user.name}
-          </p>
-        )}
-        <div className="flex items-center gap-2">
-          <Button
-            data-testid="sidebar-signout"
-            variant="outline"
-            size="sm"
-            className="flex-1"
-            onClick={() => signOut({ callbackUrl: "/login" })}
-          >
-            <LogOut className="size-3" aria-hidden />
-            Sign out
-          </Button>
-          <ThemeToggle />
-        </div>
-      </div>
     </aside>
   );
 }
