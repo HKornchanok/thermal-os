@@ -53,6 +53,13 @@ export interface AreaChartProps<TData extends Record<string, unknown>> {
 
   /** Format x-axis tick labels (e.g. ISO → HH:MM). */
   xTickFormatter?: (value: unknown) => string;
+  /**
+   * Explicit set of x-axis tick values to render. When omitted, Recharts
+   * picks ticks automatically from `data` — fine for sparse series, but
+   * dense ones (e.g. 5-min buckets over 24h) crowd the axis. Pass a
+   * pre-thinned list (one per hour, etc.) to control tick density.
+   */
+  xTicks?: ReadonlyArray<string | number>;
   /** Format y-axis tick labels (e.g. number → "32 kW"). */
   yTickFormatter?: (value: unknown) => string;
   /** Format the tooltip's heading (the x-value of the hovered bucket). */
@@ -79,6 +86,7 @@ export function AreaChart<TData extends Record<string, unknown>>({
   showGrid = true,
   className,
   xTickFormatter,
+  xTicks,
   yTickFormatter,
   tooltipLabelFormatter,
   tooltipFormatter,
@@ -130,6 +138,7 @@ export function AreaChart<TData extends Record<string, unknown>>({
           <XAxis
             dataKey={xKey}
             tickFormatter={xTickFormatter}
+            ticks={xTicks ? [...xTicks] : undefined}
             tick={CHART_AXIS_STYLE}
             stroke={CHART_GRID_STROKE}
             tickLine={false}
