@@ -369,7 +369,7 @@ function ZoneLegend({
             type="button"
             onClick={onShowAll}
             disabled={allVisible}
-            className="text-xs text-muted-foreground underline-offset-2 hover:underline disabled:no-underline disabled:opacity-40"
+            className="rounded text-xs text-muted-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:no-underline disabled:opacity-40"
             data-testid="energy-zone-show-all"
           >
             Show all
@@ -379,7 +379,7 @@ function ZoneLegend({
             type="button"
             onClick={onHideAll}
             disabled={allHidden}
-            className="text-xs text-muted-foreground underline-offset-2 hover:underline disabled:no-underline disabled:opacity-40"
+            className="rounded text-xs text-muted-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card disabled:no-underline disabled:opacity-40"
             data-testid="energy-zone-hide-all"
           >
             Hide all
@@ -442,11 +442,13 @@ function SegmentedToggle<T extends string>({
           }
           type="button"
           onClick={() => onChange(opt.value)}
-          className={
+          className={cn(
+            "rounded px-2.5 py-1 text-xs font-medium",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card",
             value === opt.value
-              ? "rounded bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
-              : "rounded px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
-          }
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted"
+          )}
         >
           {opt.label}
         </button>

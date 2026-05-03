@@ -49,7 +49,8 @@ export function MachineCard({
       aria-pressed={isInteractive ? !!selected : undefined}
       className={cn(
         "rounded-lg border bg-card p-3 text-left text-card-foreground transition-colors",
-        isInteractive && "cursor-pointer hover:bg-muted",
+        isInteractive &&
+          "cursor-pointer hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         selected ? "border-primary ring-1 ring-primary" : "border-border",
         className
       )}
