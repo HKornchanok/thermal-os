@@ -45,6 +45,18 @@ from building.models import AIDecision, Machine, SensorReading
 
 
 # ---------------------------------------------------------------------------
+# Bangkok timezone — the building lives here, so all schedule hours
+# ("06:00 building opens", "22:00 night mode") are Bangkok local. Generate
+# timestamps in BANGKOK_TZ and let Django convert to UTC on save (USE_TZ=True
+# in settings). When the frontend renders via `new Date(iso).getHours()` in
+# the browser's local zone, a Bangkok viewer sees 06:00–22:00 and a remote
+# viewer sees the corresponding offset of the SAME building day.
+# ---------------------------------------------------------------------------
+
+BANGKOK_TZ = timezone(timedelta(hours=7))
+
+
+# ---------------------------------------------------------------------------
 # Machine registry — names, zones, and rated powers from the brief's
 # "Machines" appendix table.
 # ---------------------------------------------------------------------------
@@ -465,10 +477,19 @@ class Command(BaseCommand):
         self._ensure_admin()
         machines = self._upsert_machines()
 
-        # Anchor the seed window at the most recent midnight UTC so charts
-        # land on whole-day boundaries. Total span is `days` long, ending
-        # at midnight + 24h (i.e. last reading is at 23:55 of the final day).
-        end = datetime.now(timezone.utc).replace(
+        # Anchor the seed window at the most recent midnight Bangkok time
+        # so chart days line up with how an operator on-site reads the
+        # clock. The brief's daily-pattern table ("06:00 building opens",
+        # "22:00 night mode") is Bangkok local time — without this anchor,
+        # a Bangkok viewer would see the building wake up at 13:00 and go
+        # to night mode at 05:00 because the schedule constants were
+        # being interpreted as UTC.
+        #
+        # Django stores DateTimeField as UTC (USE_TZ=True), so passing a
+        # tz-aware Bangkok datetime round-trips correctly: stored as UTC,
+        # serialised back as ISO with +00:00, then rendered in the
+        # viewer's local zone by `new Date(iso)` in the frontend.
+        end = datetime.now(BANGKOK_TZ).replace(
             hour=0, minute=0, second=0, microsecond=0
         ) + timedelta(days=1)
         start = end - timedelta(days=days)
