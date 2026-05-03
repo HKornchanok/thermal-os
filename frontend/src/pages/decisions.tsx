@@ -10,6 +10,7 @@ import {
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ErrorState, LoadingState } from "@/components/dashboard/states";
 import {
   Table,
   TableBody,
@@ -223,13 +224,14 @@ export default function DecisionsPage() {
 
       <div className="mt-4 rounded-lg border border-border bg-card text-card-foreground">
         {isLoading ? (
-          <p className="p-6 text-sm text-muted-foreground" data-testid="decisions-loading">
-            Loading decisions…
-          </p>
+          <LoadingState message="Loading decisions…" testId="decisions-loading" />
         ) : isError ? (
-          <p className="p-6 text-sm text-destructive" data-testid="decisions-error">
-            Failed to load decisions: {error instanceof Error ? error.message : "unknown error"}
-          </p>
+          <ErrorState
+            message={`Failed to load decisions: ${
+              error instanceof Error ? error.message : "unknown error"
+            }`}
+            testId="decisions-error"
+          />
         ) : (
           <Table data-testid="decisions-table">
             <TableHeader>
