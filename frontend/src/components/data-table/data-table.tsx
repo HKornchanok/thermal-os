@@ -1,8 +1,24 @@
 import {
   type ColumnDef,
   flexRender,
+  type RowData,
   type Table as TanStackTable,
 } from "@tanstack/react-table";
+
+// Add per-column sizing hooks to ColumnMeta. Declaration-merges with the
+// filter-related additions in components/data-table/column-filter.tsx —
+// TypeScript accumulates fields across declarations.
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
+    /**
+     * Per-column minimum width in pixels. When set, applied as an inline
+     * style on the column's <TableHead> + <TableCell> so it overrides
+     * the table-wide cellMinWidthClass default.
+     */
+    minWidth?: number;
+  }
+}
 
 import { ErrorState, LoadingState } from "@/components/dashboard/states";
 import {
@@ -93,16 +109,26 @@ export function DataTable<TData, TValue>({
       <TableHeader>
         {table.getHeaderGroups().map((headerGroup) => (
           <TableRow key={headerGroup.id}>
-            {headerGroup.headers.map((header) => (
-              <TableHead key={header.id} className={cn(cellMinWidthClass)}>
-                {header.isPlaceholder
-                  ? null
-                  : flexRender(
-                      header.column.columnDef.header,
-                      header.getContext()
-                    )}
-              </TableHead>
-            ))}
+            {headerGroup.headers.map((header) => {
+              const explicit = header.column.columnDef.meta?.minWidth;
+              return (
+                <TableHead
+                  key={header.id}
+                  // Per-column meta.minWidth wins over the table-wide
+                  // default; inline `min-width` style takes precedence
+                  // over the Tailwind class.
+                  className={cn(cellMinWidthClass)}
+                  style={explicit ? { minWidth: `${explicit}px` } : undefined}
+                >
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(
+                        header.column.columnDef.header,
+                        header.getContext()
+                      )}
+                </TableHead>
+              );
+            })}
           </TableRow>
         ))}
       </TableHeader>
@@ -123,11 +149,18 @@ export function DataTable<TData, TValue>({
         ) : (
           rows.map((row) => (
             <TableRow key={row.id}>
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id} className={cn(cellMinWidthClass)}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
+              {row.getVisibleCells().map((cell) => {
+                const explicit = cell.column.columnDef.meta?.minWidth;
+                return (
+                  <TableCell
+                    key={cell.id}
+                    className={cn(cellMinWidthClass)}
+                    style={explicit ? { minWidth: `${explicit}px` } : undefined}
+                  >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                );
+              })}
             </TableRow>
           ))
         )}

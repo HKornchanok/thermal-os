@@ -85,7 +85,9 @@ export const decisionColumns: ColumnDef<Decision>[] = [
   {
     accessorKey: "decided_at",
     enableColumnFilter: true,
-    meta: { filterVariant: "date", filterLabel: "Decided at" },
+    // 200px lets the formatted datetime ("May 03, 2026, 16:05") + the
+    // funnel button breathe; the default 120px wraps awkwardly.
+    meta: { filterVariant: "date", filterLabel: "Decided at", minWidth: 200 },
     header: ({ column }) => (
       <HeaderShell label="When">
         <ColumnFilter column={column} />
