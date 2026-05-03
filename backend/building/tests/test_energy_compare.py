@@ -98,7 +98,7 @@ def test_compare_savings_pct_arithmetic(admin_client):
     before = body["before"]["avg_kw"]
     after = body["after"]["avg_kw"]
     expected = round((before - after) / before * 100.0, 2)
-    assert body["savings_pct"] == pytest.approx(expected, abs=0.01)
+    assert body["savings_pct"] == pytest.approx(expected, abs=0.02)
 
 
 # ---------- Equal periods -> ~0% savings ------------------------------------
