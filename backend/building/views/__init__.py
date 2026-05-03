@@ -1,4 +1,4 @@
-from .building import summary
+from .building import energy, summary
 from .machines import list_machines, machine_sensors
 
-__all__ = ["list_machines", "machine_sensors", "summary"]
+__all__ = ["energy", "list_machines", "machine_sensors", "summary"]

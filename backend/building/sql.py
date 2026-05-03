@@ -64,3 +64,15 @@ KWH_BETWEEN = """
     FROM building_sensorreading
     WHERE recorded_at >= %s AND recorded_at < %s
 """
+
+
+# /api/building/energy/ — building-wide power over a time range,
+# time-bucketed. {bucket_interval} comes from utils.ALLOWED_BUCKETS_AGGREGATE.
+TOTAL_ENERGY_TPL = """
+    SELECT time_bucket('{bucket_interval}'::interval, recorded_at) AS bucket,
+           SUM(power_kw) AS total_kw
+    FROM building_sensorreading
+    WHERE recorded_at >= %s AND recorded_at < %s
+    GROUP BY bucket
+    ORDER BY bucket
+"""

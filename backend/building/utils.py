@@ -22,6 +22,14 @@ ALLOWED_BUCKETS_FULL: dict[str, str] = {
     "1d": "1 day",
 }
 
+# Subset for building-wide aggregate endpoints. 5-min raw is too noisy at
+# scale (288 points/day across all 12 machines summed); 1-day is too coarse
+# for the area chart's pacing.
+ALLOWED_BUCKETS_AGGREGATE: dict[str, str] = {
+    "15min": "15 minutes",
+    "1h": "1 hour",
+}
+
 
 def dictfetchall(cursor) -> list[dict]:
     """Return all rows from a cursor as a list of dicts keyed by column name."""
