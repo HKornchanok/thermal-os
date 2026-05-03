@@ -59,6 +59,35 @@ export const CHART_SERIES_COLORS = [
 ] as const;
 
 /**
+ * Pick a chart-series colour by index, expanding the base 5-colour
+ * palette via CSS `color-mix` so charts with more than 5 series (zone
+ * breakdown is 12) don't repeat hues.
+ *
+ *   index 0–4   → base chart-1..5
+ *   index 5–9   → 70% base + 30% foreground (darker variant)
+ *   index 10–14 → 70% base + 30% background (lighter variant)
+ *   index 15+   → cycle from index 0 (rare in practice)
+ *
+ * `color-mix(in oklch, ...)` is supported in modern Chrome/Safari/
+ * Firefox. The theme's variables are OKLCH so mixing stays in the same
+ * colour space — no perceptual jumps.
+ */
+export function colorForSeriesIndex(i: number): string {
+  const base = CHART_SERIES_COLORS[i % CHART_SERIES_COLORS.length];
+  const variant = Math.floor(i / CHART_SERIES_COLORS.length) % 3;
+  switch (variant) {
+    case 0:
+      return base;
+    case 1:
+      return `color-mix(in oklch, ${base} 70%, var(--foreground) 30%)`;
+    case 2:
+      return `color-mix(in oklch, ${base} 70%, var(--background) 30%)`;
+    default:
+      return base;
+  }
+}
+
+/**
  * Format an ISO 8601 bucket string for X-axis ticks. Always renders as
  * 24-hour HH:MM in the user's local time so dashboards read consistently
  * regardless of locale.
