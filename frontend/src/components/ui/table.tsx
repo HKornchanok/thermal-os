@@ -77,10 +77,10 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      // min-h-10 (40px) so headers stay readable even with a single-line
-      // label; align-middle centres the cell's inline/inline-block content
-      // vertically within whatever the row's actual rendered height is.
-      "min-h-10 px-2 text-left align-middle text-xs font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
+      // Fixed h-10 (40px) so every header row is the same height, no matter
+      // what's inside the cell (label only, label + funnel button, etc.).
+      // align-middle centres the cell content vertically within that 40px.
+      "h-10 px-2 text-left align-middle text-xs font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0",
       className
     )}
     {...props}
