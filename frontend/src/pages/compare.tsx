@@ -125,7 +125,9 @@ export default function ComparePage() {
   };
 
   const isChartLoading =
-    !!compare?.before && !!compare?.after && (beforeQuery.isLoading || afterQuery.isLoading);
+    !!compare?.before &&
+    !!compare?.after &&
+    (beforeQuery.isLoading || afterQuery.isLoading);
   const isChartError = beforeQuery.isError || afterQuery.isError;
 
   return (
@@ -146,8 +148,8 @@ export default function ComparePage() {
         Compare average building power between two periods. Defaults split the
         seeded window in half — Period A covers manual operations, Period B
         covers automated AI control. The chart overlays the two periods on a
-        shared "hours from period start" axis so curves can be compared
-        directly even when the periods have different absolute timestamps.
+        shared "hours from period start" axis so curves can be compared directly
+        even when the periods have different absolute timestamps.
       </p>
 
       {/* Period pickers */}
@@ -177,7 +179,10 @@ export default function ComparePage() {
       {/* KPIs */}
       <section className="mt-4">
         {compareQuery.isLoading ? (
-          <LoadingState message="Loading comparison…" testId="compare-loading" />
+          <LoadingState
+            message="Loading comparison…"
+            testId="compare-loading"
+          />
         ) : compareQuery.isError ? (
           <ErrorState
             message={`Failed to load comparison: ${
@@ -210,15 +215,15 @@ export default function ComparePage() {
                       compare.savings_pct > 0
                         ? "text-primary"
                         : compare.savings_pct < 0
-                        ? "text-destructive"
-                        : "text-foreground"
+                          ? "text-destructive"
+                          : "text-foreground"
                     }
                   >
                     {compare.savings_pct > 0
                       ? "−"
                       : compare.savings_pct < 0
-                      ? "+"
-                      : ""}
+                        ? "+"
+                        : ""}
                     {Math.abs(compare.savings_pct).toFixed(1)}%
                   </span>
                 ) : (
@@ -266,10 +271,7 @@ export default function ComparePage() {
             <AreaChart
               data={chartData}
               xKey="offsetHours"
-              series={[
-                { key: SERIES_BEFORE },
-                { key: SERIES_AFTER },
-              ]}
+              series={[{ key: SERIES_BEFORE }, { key: SERIES_AFTER }]}
               xTickFormatter={(v) => `${v}h`}
               yTickFormatter={(v) => `${fmtNum(v as number, 0)} kW`}
               tooltipLabelFormatter={(v) => {

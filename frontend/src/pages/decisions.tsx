@@ -25,7 +25,9 @@ export default function DecisionsPage() {
 
   // Wrap the setter so any filter change resets to page 1 — page 5 of a
   // smaller filtered result would otherwise show an empty body.
-  const handleColumnFiltersChange: OnChangeFn<ColumnFiltersState> = (updater) => {
+  const handleColumnFiltersChange: OnChangeFn<ColumnFiltersState> = (
+    updater
+  ) => {
     setColumnFilters((prev) =>
       typeof updater === "function" ? updater(prev) : updater
     );

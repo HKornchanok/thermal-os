@@ -1,0 +1,14 @@
+node_modules
+.next
+dist
+build
+coverage
+
+# Pin lockfile shape — npm owns the formatting.
+package-lock.json
+
+# Husky internals are auto-generated.
+.husky/_
+
+# Public assets we author by hand (svg paths shouldn't be reflowed).
+public/favicon.svg

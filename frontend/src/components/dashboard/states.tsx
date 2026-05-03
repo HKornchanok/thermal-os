@@ -21,8 +21,7 @@ interface BaseProps {
   testId?: string;
 }
 
-const SHELL_CLASS =
-  "flex items-center justify-center gap-2 p-6 text-sm";
+const SHELL_CLASS = "flex items-center justify-center gap-2 p-6 text-sm";
 
 export function LoadingState({
   message = "Loading…",

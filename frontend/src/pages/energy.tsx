@@ -77,9 +77,7 @@ export default function EnergyPage() {
 
   const params = useMemo(
     () =>
-      day
-        ? { from: dayStartIso(day), to: dayEndIso(day), bucket }
-        : { bucket },
+      day ? { from: dayStartIso(day), to: dayEndIso(day), bucket } : { bucket },
     [day, bucket]
   );
 
@@ -142,10 +140,7 @@ export default function EnergyPage() {
     return zonePoints.map((p) =>
       Object.entries(p)
         .filter(([k]) => k !== "bucket")
-        .reduce(
-          (sum, [, v]) => sum + (typeof v === "number" ? v : 0),
-          0
-        )
+        .reduce((sum, [, v]) => sum + (typeof v === "number" ? v : 0), 0)
     );
   }, [view, totalPoints, zonePoints]);
 
@@ -236,8 +231,16 @@ export default function EnergyPage() {
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-3">
-        <KpiCard label="Peak" value={`${fmtNum(peak)} kW`} testId="energy-peak" />
-        <KpiCard label="Average" value={`${fmtNum(avg)} kW`} testId="energy-avg" />
+        <KpiCard
+          label="Peak"
+          value={`${fmtNum(peak)} kW`}
+          testId="energy-peak"
+        />
+        <KpiCard
+          label="Average"
+          value={`${fmtNum(avg)} kW`}
+          testId="energy-avg"
+        />
         <KpiCard
           label="Data points"
           value={count.toLocaleString()}
@@ -259,7 +262,10 @@ export default function EnergyPage() {
 
       <div className="mt-4 rounded-lg border border-border bg-card p-4 text-card-foreground">
         {isLoading ? (
-          <LoadingState message="Loading energy data…" testId="energy-loading" />
+          <LoadingState
+            message="Loading energy data…"
+            testId="energy-loading"
+          />
         ) : isError ? (
           <ErrorState
             message={`Failed to load energy data: ${
@@ -268,7 +274,10 @@ export default function EnergyPage() {
             testId="energy-error"
           />
         ) : count === 0 ? (
-          <p className="p-6 text-center text-sm text-muted-foreground" data-testid="energy-empty">
+          <p
+            className="p-6 text-center text-sm text-muted-foreground"
+            data-testid="energy-empty"
+          >
             No data {day ? `for ${formatDayLabel(day)}` : "in range"}.
           </p>
         ) : (
@@ -281,10 +290,7 @@ export default function EnergyPage() {
                 xTickFormatter={(v) => formatBucketTime(v as string)}
                 yTickFormatter={(v) => `${fmtNum(v as number, 0)} kW`}
                 tooltipLabelFormatter={(v) => formatBucketLabel(v as string)}
-                tooltipFormatter={(v) => [
-                  `${fmtNum(v as number)} kW`,
-                  "Total",
-                ]}
+                tooltipFormatter={(v) => [`${fmtNum(v as number)} kW`, "Total"]}
               />
             ) : visibleZoneSeries.length === 0 ? (
               <p
@@ -316,7 +322,10 @@ export default function EnergyPage() {
                   aria-live="polite"
                   data-testid="energy-refreshing"
                 >
-                  <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden />
+                  <Loader2
+                    className="size-3 shrink-0 animate-spin"
+                    aria-hidden
+                  />
                   <span>Refreshing</span>
                 </span>
               </div>
@@ -360,7 +369,7 @@ function ZoneLegend({
             type="button"
             onClick={onShowAll}
             disabled={allVisible}
-            className="text-xs text-muted-foreground underline-offset-2 hover:underline disabled:opacity-40 disabled:no-underline"
+            className="text-xs text-muted-foreground underline-offset-2 hover:underline disabled:no-underline disabled:opacity-40"
             data-testid="energy-zone-show-all"
           >
             Show all
@@ -370,7 +379,7 @@ function ZoneLegend({
             type="button"
             onClick={onHideAll}
             disabled={allHidden}
-            className="text-xs text-muted-foreground underline-offset-2 hover:underline disabled:opacity-40 disabled:no-underline"
+            className="text-xs text-muted-foreground underline-offset-2 hover:underline disabled:no-underline disabled:opacity-40"
             data-testid="energy-zone-hide-all"
           >
             Hide all
@@ -428,12 +437,14 @@ function SegmentedToggle<T extends string>({
       {options.map((opt) => (
         <button
           key={opt.value}
-          data-testid={testIdPrefix ? `${testIdPrefix}-${opt.value}` : undefined}
+          data-testid={
+            testIdPrefix ? `${testIdPrefix}-${opt.value}` : undefined
+          }
           type="button"
           onClick={() => onChange(opt.value)}
           className={
             value === opt.value
-              ? "rounded px-2.5 py-1 text-xs font-medium bg-primary text-primary-foreground"
+              ? "rounded bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
               : "rounded px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-muted"
           }
         >

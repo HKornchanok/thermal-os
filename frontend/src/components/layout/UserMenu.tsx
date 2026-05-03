@@ -42,7 +42,10 @@ export function UserMenu() {
 
       <DropdownMenuContent align="end" className="min-w-[14rem]">
         <DropdownMenuLabel className="text-xs">Signed in as</DropdownMenuLabel>
-        <div className="px-2 pb-2 text-sm font-medium" data-testid="user-menu-name">
+        <div
+          className="px-2 pb-2 text-sm font-medium"
+          data-testid="user-menu-name"
+        >
           {name}
         </div>
         <DropdownMenuSeparator />

@@ -66,7 +66,7 @@ function AlertRow({
         "flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
         isCritical
           ? "border-destructive/50 bg-destructive/10 text-foreground"
-          : "border-border bg-muted/40 text-foreground",
+          : "bg-muted/40 border-border text-foreground",
         interactive && "cursor-pointer hover:bg-muted"
       )}
     >

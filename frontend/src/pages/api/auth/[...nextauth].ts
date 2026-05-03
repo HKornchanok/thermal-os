@@ -51,7 +51,10 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!res.ok) return null;
-        const tokens = (await res.json()) as { access: string; refresh: string };
+        const tokens = (await res.json()) as {
+          access: string;
+          refresh: string;
+        };
 
         return {
           id: credentials.username,

@@ -49,8 +49,8 @@ export default function OverviewPage() {
         summary.trend_pct > 0
           ? "text-destructive"
           : summary.trend_pct < 0
-          ? "text-primary"
-          : "text-muted-foreground",
+            ? "text-primary"
+            : "text-muted-foreground",
     };
   })();
 

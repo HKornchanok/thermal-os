@@ -54,12 +54,17 @@ export default function App({
           enableSystem
           disableTransitionOnChange
         >
-          <div className={`${inter.variable} ${jetbrainsMono.variable} font-sans min-h-screen`}>
+          <div
+            className={`${inter.variable} ${jetbrainsMono.variable} min-h-screen font-sans`}
+          >
             {useLayout ? <Layout>{page}</Layout> : page}
           </div>
         </ThemeProvider>
         {process.env.NODE_ENV === "development" && (
-          <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />
+          <ReactQueryDevtools
+            initialIsOpen={false}
+            buttonPosition="bottom-right"
+          />
         )}
       </QueryClientProvider>
     </SessionProvider>

@@ -147,7 +147,7 @@ export const decisionColumns: ColumnDef<Decision>[] = [
     enableColumnFilter: false,
     header: () => <HeaderShell label="Reason" />,
     cell: ({ getValue }) => (
-      <span className="text-sm text-foreground/90">{getValue<string>()}</span>
+      <span className="text-foreground/90 text-sm">{getValue<string>()}</span>
     ),
   },
 ];

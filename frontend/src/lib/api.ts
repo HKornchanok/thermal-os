@@ -73,7 +73,6 @@ export async function apiFetch<T>(
   return (await response.json()) as T;
 }
 
-
 // =====================================================================
 // Response types — mirror the shapes documented in DESIGN.md §1B.
 // Keep these here as the single source of truth used by hooks and pages.

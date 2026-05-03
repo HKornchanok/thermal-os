@@ -23,7 +23,13 @@ export interface KpiCardProps {
   className?: string;
 }
 
-export function KpiCard({ label, value, hint, testId, className }: KpiCardProps) {
+export function KpiCard({
+  label,
+  value,
+  hint,
+  testId,
+  className,
+}: KpiCardProps) {
   return (
     <div
       className={cn(

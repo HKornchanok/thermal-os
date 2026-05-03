@@ -3,7 +3,11 @@ import { useSession } from "next-auth/react";
 
 import { apiFetch, type SensorSeriesPoint } from "@/lib/api";
 
-export type MachineMetric = "power_kw" | "temperature" | "setpoint" | "speed_pct";
+export type MachineMetric =
+  | "power_kw"
+  | "temperature"
+  | "setpoint"
+  | "speed_pct";
 export type MachineSensorBucket = "5min" | "15min" | "1h" | "1d";
 
 export type MachineSensorsParams = {

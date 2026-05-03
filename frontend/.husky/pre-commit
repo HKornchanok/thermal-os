@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+# Run prettier (via lint-staged) only on the frontend files in this commit.
+# The frontend package owns prettier and its config; backend / docs are
+# left to their own toolchains. Husky runs this from the repo root, but
+# lint-staged + prettier need to resolve config relative to frontend/.
+cd frontend && npx lint-staged
