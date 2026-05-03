@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    alerts_list,
     compare,
     decisions_list,
     energy,
@@ -18,4 +19,5 @@ urlpatterns = [
     path("building/energy/by-zone/", energy_by_zone, name="building_energy_by_zone"),
     path("decisions/", decisions_list, name="decisions_list"),
     path("energy/compare/", compare, name="energy_compare"),
+    path("alerts/", alerts_list, name="alerts_list"),
 ]

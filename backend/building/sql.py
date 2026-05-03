@@ -140,3 +140,66 @@ COMPARE_AVG = """
         GROUP BY bucket
     ) hourly
 """
+
+
+# /api/alerts/ — Rule 1: latest reading > 90% of rated, status ON.
+# Inner DISTINCT ON walks the (machine_id, recorded_at DESC) index once
+# per machine; outer WHERE filters to the threshold breach.
+ALERT_POWER_SPIKE = """
+    SELECT sub.machine_id, sub.name, sub.power_kw, sub.rated_power_kw
+    FROM (
+        SELECT DISTINCT ON (sr.machine_id)
+            sr.machine_id, m.name, sr.power_kw, m.rated_power_kw, sr.status
+        FROM building_sensorreading sr
+        JOIN building_machine m ON m.id = sr.machine_id
+        ORDER BY sr.machine_id, sr.recorded_at DESC
+    ) sub
+    WHERE sub.status = 'ON' AND sub.power_kw > sub.rated_power_kw * 0.90
+"""
+
+
+# /api/alerts/ — Rule 2: latest AC reading with |temp - setpoint| > 2°C.
+# Pre-filters to AC machines (temperature/setpoint NOT NULL), then takes
+# the latest reading per machine and tests the drift threshold.
+ALERT_TEMP_DRIFT = """
+    SELECT sub.machine_id, sub.name, sub.temperature, sub.setpoint
+    FROM (
+        SELECT DISTINCT ON (sr.machine_id)
+            sr.machine_id, m.name, sr.temperature, sr.setpoint, sr.status
+        FROM building_sensorreading sr
+        JOIN building_machine m ON m.id = sr.machine_id
+        WHERE sr.temperature IS NOT NULL AND sr.setpoint IS NOT NULL
+        ORDER BY sr.machine_id, sr.recorded_at DESC
+    ) sub
+    WHERE sub.status = 'ON' AND ABS(sub.temperature - sub.setpoint) > 2.0
+"""
+
+
+# /api/alerts/ — Rule 3: non-critical machine ON for >16 consecutive hours.
+# `max_on` = latest ON timestamp; `last_off` = latest OFF timestamp.
+# If last_off < max_on (or no OFF exists), the machine has been ON
+# continuously since `last_off` (or since `max_on - 24h` if it's never
+# been OFF in seeded history). Critical machines (Server Room AC, Basement
+# Parking fan) are excluded — they're supposed to be on 24/7.
+ALERT_NONSTOP = """
+    SELECT m.id AS machine_id, m.name,
+           EXTRACT(EPOCH FROM (
+               max_on.ts - COALESCE(last_off.ts, max_on.ts - INTERVAL '24 hours')
+           )) / 3600 AS hours_on
+    FROM building_machine m
+    JOIN (
+        SELECT DISTINCT ON (machine_id) machine_id, recorded_at AS ts
+        FROM building_sensorreading WHERE status = 'ON'
+        ORDER BY machine_id, recorded_at DESC
+    ) max_on ON max_on.machine_id = m.id
+    LEFT JOIN (
+        SELECT DISTINCT ON (machine_id) machine_id, recorded_at AS ts
+        FROM building_sensorreading WHERE status = 'OFF'
+        ORDER BY machine_id, recorded_at DESC
+    ) last_off ON last_off.machine_id = m.id
+    WHERE NOT m.is_critical
+      AND (last_off.ts IS NULL OR last_off.ts < max_on.ts)
+      AND EXTRACT(EPOCH FROM (
+          max_on.ts - COALESCE(last_off.ts, max_on.ts - INTERVAL '24 hours')
+      )) / 3600 > 16
+"""
