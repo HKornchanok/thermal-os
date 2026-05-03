@@ -9,108 +9,15 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table/data-table";
+import {
+  extractDateRangeFromColumnFilters,
+  extractMultiselectFromColumnFilters,
+} from "@/components/data-table/filter-utils";
 import { useDecisions } from "@/lib/hooks/use-decisions";
 import type { Decision, DecisionAction } from "@/lib/api";
-import {
-  type ActionFilter,
-  type DateFilterValue,
-  decisionColumns,
-} from "@/features/decisions/columns";
+import { decisionColumns } from "@/features/decisions/columns";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
-
-/** Convert a datetime-local value (`YYYY-MM-DDTHH:MM`, local TZ) to ISO UTC. */
-function localDatetimeToIso(local: string): string {
-  // `new Date("YYYY-MM-DDTHH:MM")` parses in the browser's local zone;
-  // toISOString() then renders the equivalent UTC instant.
-  return new Date(local).toISOString();
-}
-
-/** Day-start ISO for a YYYY-MM-DD value, in the browser's local zone. */
-function localDateStart(yyyyMmDd: string): string {
-  // Same idea — interpret midnight in local time, render UTC.
-  return new Date(`${yyyyMmDd}T00:00:00`).toISOString();
-}
-
-/** The next day's local midnight as ISO UTC — exclusive end-of-day. */
-function localDateAfter(yyyyMmDd: string): string {
-  const d = new Date(`${yyyyMmDd}T00:00:00`);
-  d.setDate(d.getDate() + 1);
-  return d.toISOString();
-}
-
-/** One second after the given local datetime, as ISO UTC. */
-function plusOneSecondIso(local: string): string {
-  const d = new Date(local);
-  d.setSeconds(d.getSeconds() + 1);
-  return d.toISOString();
-}
-
-/**
- * Translate a per-column date filter (with operator) into the backend's
- * half-open `from <= recorded < to` range params.
- *
- * Inputs are wall-clock — `on` is `YYYY-MM-DD` (whole day), every other
- * operator uses datetime-local `YYYY-MM-DDTHH:MM` interpreted in the
- * user's browser zone. Outputs are ISO 8601 UTC.
- *
- *   between A..B    → from = A,        to = B + 1s   (inclusive both ends)
- *   on D            → from = startOf(D), to = startOf(D + 1d)
- *   before T        → to   = T            (strictly < T)
- *   same_or_before T→ to   = T + 1s       (≤ T)
- *   after T         → from = T + 1s       (strictly > T)
- *   same_or_after T → from = T            (≥ T)
- */
-function dateFilterToRange(v: DateFilterValue): { from?: string; to?: string } {
-  switch (v.op) {
-    case "between": {
-      const out: { from?: string; to?: string } = {};
-      if (v.from) out.from = localDatetimeToIso(v.from);
-      // Treat the `to` bound as inclusive: backend uses `recorded < to`,
-      // so add a second so equality at the bound is included.
-      if (v.to) out.to = plusOneSecondIso(v.to);
-      return out;
-    }
-    case "on":
-      return v.value
-        ? { from: localDateStart(v.value), to: localDateAfter(v.value) }
-        : {};
-    case "before":
-      return v.value ? { to: localDatetimeToIso(v.value) } : {};
-    case "same_or_before":
-      return v.value ? { to: plusOneSecondIso(v.value) } : {};
-    case "after":
-      return v.value ? { from: plusOneSecondIso(v.value) } : {};
-    case "same_or_after":
-      return v.value ? { from: localDatetimeToIso(v.value) } : {};
-  }
-}
-
-/**
- * Extract the API-shaped params from TanStack Table's columnFilters array.
- * Each filter column knows its own value shape; the page only knows the
- * `id`s and how to translate them into useDecisions params.
- */
-function paramsFromColumnFilters(filters: ColumnFiltersState): {
-  action?: DecisionAction[];
-  from?: string;
-  to?: string;
-} {
-  const result: { action?: DecisionAction[]; from?: string; to?: string } = {};
-
-  for (const f of filters) {
-    if (f.id === "action_type") {
-      const v = f.value as ActionFilter | undefined;
-      if (v && v.length > 0) result.action = v;
-    } else if (f.id === "decided_at") {
-      const range = dateFilterToRange(f.value as DateFilterValue);
-      if (range.from) result.from = range.from;
-      if (range.to) result.to = range.to;
-    }
-  }
-
-  return result;
-}
 
 export default function DecisionsPage() {
   const [page, setPage] = useState(1);
@@ -126,8 +33,16 @@ export default function DecisionsPage() {
     setPage(1);
   };
 
+  // Page-specific composition: the data-table package gives us per-column
+  // extractors, the page just maps column ids to API params.
   const apiParams = useMemo(
-    () => paramsFromColumnFilters(columnFilters),
+    () => ({
+      ...extractDateRangeFromColumnFilters(columnFilters, "decided_at"),
+      action: extractMultiselectFromColumnFilters<DecisionAction>(
+        columnFilters,
+        "action_type"
+      ),
+    }),
     [columnFilters]
   );
 
@@ -173,7 +88,7 @@ export default function DecisionsPage() {
       </div>
 
       {/* Filter-state controls live in the page; per-page, refreshing
-          indicator, and pagination are now in DataTable's footer.
+          indicator, and pagination are in DataTable's footer.
           min-h-8 reserves the Clear button height so the table doesn't
           shift when the button shows/hides. */}
       <div className="mt-4 flex min-h-8 flex-wrap items-center gap-3">

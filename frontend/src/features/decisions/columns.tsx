@@ -29,16 +29,6 @@ export const ACTION_BADGE_VARIANT: Record<
   set_temp: "secondary",
 };
 
-// =====================================================================
-// Filter value shapes the page deserialises out of state.columnFilters.
-// =====================================================================
-
-/** action_type column stores an array of selected DecisionActions. */
-export type ActionFilter = DecisionAction[];
-// Re-export the shared discriminated union so the page can import a
-// single canonical type instead of redeclaring it.
-export type { DateFilterValue, DateFilterOp } from "@/components/data-table/column-filter";
-
 // Multi-select options — "All" is implicit (empty selection = no filter),
 // so the list contains only the actual action values.
 const ACTION_FILTER_OPTIONS: { value: string; label: string }[] = [
