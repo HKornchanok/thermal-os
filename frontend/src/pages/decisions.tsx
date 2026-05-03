@@ -6,7 +6,6 @@ import {
   type OnChangeFn,
   useReactTable,
 } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table/data-table";
@@ -151,10 +150,8 @@ export default function DecisionsPage() {
     pageCount: data?.total_pages ?? -1,
   });
 
-  const totalPages = data?.total_pages ?? 0;
   const count = data?.count ?? 0;
-  const canPrev = page > 1;
-  const canNext = page < totalPages;
+  const totalPages = data?.total_pages ?? 0;
   const hasActiveFilter = columnFilters.length > 0;
 
   const setPageSizeAndResetPage = (next: number) => {
@@ -175,25 +172,11 @@ export default function DecisionsPage() {
         </p>
       </div>
 
-      {/* min-h-8 reserves the height of the Clear button (h-8) so the row
-          doesn't grow when filters become active and shift the table down. */}
+      {/* Filter-state controls live in the page; per-page, refreshing
+          indicator, and pagination are now in DataTable's footer.
+          min-h-8 reserves the Clear button height so the table doesn't
+          shift when the button shows/hides. */}
       <div className="mt-4 flex min-h-8 flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          Per page
-          <select
-            data-testid="page-size"
-            value={pageSize}
-            onChange={(e) => setPageSizeAndResetPage(Number(e.target.value))}
-            className="rounded-md border border-input bg-background px-2 py-1.5 text-xs text-foreground"
-          >
-            {PAGE_SIZE_OPTIONS.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
-
         {hasActiveFilter && (
           <Button
             data-testid="clear-filters"
@@ -207,18 +190,6 @@ export default function DecisionsPage() {
             Clear filters
           </Button>
         )}
-
-        {isFetching && !isLoading && (
-          <span
-            className="inline-flex items-center gap-1.5 text-xs leading-none text-muted-foreground"
-            role="status"
-            aria-live="polite"
-            data-testid="decisions-refreshing"
-          >
-            <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden />
-            <span>Refreshing</span>
-          </span>
-        )}
       </div>
 
       <div className="mt-4 rounded-lg border border-border bg-card text-card-foreground">
@@ -227,45 +198,31 @@ export default function DecisionsPage() {
           columns={decisionColumns}
           isLoading={isLoading}
           isError={isError}
+          isFetching={isFetching}
           error={error}
           loadingMessage="Loading decisions…"
           errorMessage="Failed to load decisions"
           emptyMessage="No decisions match the current filters."
+          pagination={{
+            page,
+            totalPages,
+            onPageChange: setPage,
+            pageSize,
+            pageSizeOptions: PAGE_SIZE_OPTIONS,
+            onPageSizeChange: setPageSizeAndResetPage,
+          }}
           testIds={{
             table: "decisions-table",
             loading: "decisions-loading",
             error: "decisions-error",
             empty: "decisions-empty",
+            refreshing: "decisions-refreshing",
+            pageSize: "page-size",
+            paginationStatus: "decisions-pagination-status",
+            prev: "decisions-prev",
+            next: "decisions-next",
           }}
         />
-      </div>
-
-      <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-        <span data-testid="decisions-pagination-status">
-          {totalPages > 0 ? `Page ${page} of ${totalPages}` : "Page 0 of 0"}
-        </span>
-        <div className="flex gap-2">
-          <Button
-            data-testid="decisions-prev"
-            variant="outline"
-            size="sm"
-            disabled={!canPrev}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            <ChevronLeft className="size-3" aria-hidden />
-            Previous
-          </Button>
-          <Button
-            data-testid="decisions-next"
-            variant="outline"
-            size="sm"
-            disabled={!canNext}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next
-            <ChevronRight className="size-3" aria-hidden />
-          </Button>
-        </div>
       </div>
     </>
   );
