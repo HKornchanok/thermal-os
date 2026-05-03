@@ -31,8 +31,8 @@ declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData extends RowData, TValue> {
     /** Which input renders inside the popover for this column. */
-    filterVariant?: "select" | "date";
-    /** Required for variant="select". Empty value = "no filter". */
+    filterVariant?: "select" | "multiselect" | "date";
+    /** Required for variant="select" / "multiselect". Empty selection = no filter. */
     filterOptions?: { value: string; label: string }[];
     /** Optional human label used in the popover heading + aria. */
     filterLabel?: string;
@@ -118,6 +118,7 @@ function isDateFilterActive(v: DateFilterValue | undefined): boolean {
 
 function isFilterActive(value: unknown): boolean {
   if (value === undefined || value === null || value === "") return false;
+  if (Array.isArray(value)) return value.length > 0;
   if (typeof value === "object") {
     const v = value as DateFilterValue & Record<string, unknown>;
     if (typeof v.op === "string") return isDateFilterActive(v);
@@ -230,6 +231,10 @@ function FilterInput<TData>({
     );
   }
 
+  if (variant === "multiselect") {
+    return <MultiSelectFilter column={column} />;
+  }
+
   if (variant === "date") {
     // No filter set yet → default to current time when the user picks
     // an operator (rather than starting from a blank field). The
@@ -316,6 +321,65 @@ function BetweenInputs<TData>({
         />
       </label>
     </>
+  );
+}
+
+function MultiSelectFilter<TData>({ column }: { column: Column<TData, unknown> }) {
+  const options = column.columnDef.meta?.filterOptions ?? [];
+  // The stored value is an array of selected option `value`s. Empty / undefined
+  // means "no filter" (show all rows).
+  const selected = (column.getFilterValue() as string[] | undefined) ?? [];
+  const selectedSet = new Set(selected);
+
+  const toggle = (value: string) => {
+    const next = selectedSet.has(value)
+      ? selected.filter((v) => v !== value)
+      : [...selected, value];
+    column.setFilterValue(next.length > 0 ? next : undefined);
+  };
+
+  const allChecked = options.length > 0 && selected.length === options.length;
+  const someChecked = selected.length > 0 && !allChecked;
+
+  const toggleAll = () => {
+    if (allChecked || someChecked) column.setFilterValue(undefined);
+    else column.setFilterValue(options.map((o) => o.value));
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="flex cursor-pointer items-center gap-2 border-b border-border pb-1.5 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={allChecked}
+          // Indeterminate state: some but not all checked. The visual
+          // partial-tick reflects the mixed selection without forcing
+          // either "select all" or "clear all" on render.
+          ref={(el) => {
+            if (el) el.indeterminate = someChecked;
+          }}
+          onChange={toggleAll}
+          className="size-3.5 cursor-pointer accent-primary"
+          data-testid={`filter-${column.id}-all`}
+        />
+        All ({options.length})
+      </label>
+      {options.map((opt) => (
+        <label
+          key={opt.value}
+          className="flex cursor-pointer items-center gap-2 text-xs"
+        >
+          <input
+            type="checkbox"
+            checked={selectedSet.has(opt.value)}
+            onChange={() => toggle(opt.value)}
+            className="size-3.5 cursor-pointer accent-primary"
+            data-testid={`filter-${column.id}-${opt.value}`}
+          />
+          {opt.label}
+        </label>
+      ))}
+    </div>
   );
 }
 

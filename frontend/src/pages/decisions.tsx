@@ -101,16 +101,16 @@ function dateFilterToRange(v: DateFilterValue): { from?: string; to?: string } {
  * `id`s and how to translate them into useDecisions params.
  */
 function paramsFromColumnFilters(filters: ColumnFiltersState): {
-  action?: DecisionAction;
+  action?: DecisionAction[];
   from?: string;
   to?: string;
 } {
-  const result: { action?: DecisionAction; from?: string; to?: string } = {};
+  const result: { action?: DecisionAction[]; from?: string; to?: string } = {};
 
   for (const f of filters) {
     if (f.id === "action_type") {
-      const v = f.value as ActionFilter;
-      if (v) result.action = v;
+      const v = f.value as ActionFilter | undefined;
+      if (v && v.length > 0) result.action = v;
     } else if (f.id === "decided_at") {
       const range = dateFilterToRange(f.value as DateFilterValue);
       if (range.from) result.from = range.from;

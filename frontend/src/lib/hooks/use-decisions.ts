@@ -13,7 +13,11 @@ export type DecisionsParams = {
   from?: string;
   /** ISO 8601. Defaults server-side to MAX(recorded_at). */
   to?: string;
-  action?: DecisionAction;
+  /**
+   * One or more actions to include. Serialised as a comma-separated
+   * `?action=a,b` list. Empty array or undefined → no filter.
+   */
+  action?: DecisionAction[];
   page?: number;
   /** 1–100 inclusive. Default server-side: 20. */
   page_size?: number;
@@ -47,7 +51,9 @@ function buildSearchParams(params: DecisionsParams): string {
   const sp = new URLSearchParams();
   if (params.from) sp.set("from", params.from);
   if (params.to) sp.set("to", params.to);
-  if (params.action) sp.set("action", params.action);
+  if (params.action && params.action.length > 0) {
+    sp.set("action", params.action.join(","));
+  }
   if (params.page) sp.set("page", String(params.page));
   if (params.page_size) sp.set("page_size", String(params.page_size));
   return sp.toString();
