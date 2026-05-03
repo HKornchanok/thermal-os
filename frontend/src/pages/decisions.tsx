@@ -219,13 +219,13 @@ export default function DecisionsPage() {
 
         {isFetching && !isLoading && (
           <span
-            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            className="inline-flex items-center gap-1.5 text-xs leading-none text-muted-foreground"
             role="status"
             aria-live="polite"
             data-testid="decisions-refreshing"
           >
-            <Loader2 className="size-3 animate-spin" aria-hidden />
-            Refreshing
+            <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden />
+            <span>Refreshing</span>
           </span>
         )}
       </div>
