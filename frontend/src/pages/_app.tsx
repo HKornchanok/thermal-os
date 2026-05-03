@@ -9,6 +9,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState } from "react";
 
+import { AuthGate } from "@/components/layout/AuthGate";
 import { Layout } from "@/components/layout/Layout";
 import { makeQueryClient } from "@/lib/query-client";
 
@@ -48,16 +49,25 @@ export default function App({
       <QueryClientProvider client={queryClient}>
         <ThemeProvider
           attribute="class"
-          // defaultTheme="system" resolves to OS preference on first visit;
-          // an explicit choice via <ThemeToggle> persists in localStorage.
-          defaultTheme="system"
+          // Dark by default — DESIGN.md positions this as a monitoring
+          // dashboard, the kind that lives on a control-room display
+          // overnight. enableSystem still lets users with an explicit
+          // system preference override on first visit, and any choice
+          // via <ThemeToggle> persists in localStorage.
+          defaultTheme="dark"
           enableSystem
           disableTransitionOnChange
         >
           <div
             className={`${inter.variable} ${jetbrainsMono.variable} min-h-screen font-sans`}
           >
-            {useLayout ? <Layout>{page}</Layout> : page}
+            {useLayout ? (
+              <Layout>
+                <AuthGate>{page}</AuthGate>
+              </Layout>
+            ) : (
+              page
+            )}
           </div>
         </ThemeProvider>
         {process.env.NODE_ENV === "development" && (

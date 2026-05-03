@@ -87,6 +87,8 @@ function AlertRow({
           >
             {alert.severity}
           </span>
+          {/* Explicit space so screen readers and the button's accessible
+              name read "critical AC-L3 ..." rather than "criticalAC-L3 ...". */}{" "}
           <span className="font-mono font-semibold">{alert.machine_name}</span>
           <span className="text-muted-foreground"> · </span>
           <span>{alert.message}</span>
