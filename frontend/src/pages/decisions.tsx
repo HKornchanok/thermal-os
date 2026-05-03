@@ -7,7 +7,7 @@ import {
   type OnChangeFn,
   useReactTable,
 } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/dashboard/states";
@@ -218,7 +218,15 @@ export default function DecisionsPage() {
         )}
 
         {isFetching && !isLoading && (
-          <span className="text-xs text-muted-foreground">Refreshing…</span>
+          <span
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            role="status"
+            aria-live="polite"
+            data-testid="decisions-refreshing"
+          >
+            <Loader2 className="size-3 animate-spin" aria-hidden />
+            Refreshing
+          </span>
         )}
       </div>
 
