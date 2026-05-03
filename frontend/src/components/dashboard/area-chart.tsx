@@ -43,7 +43,16 @@ export interface AreaChartProps<TData extends Record<string, unknown>> {
 
   /** Stack series on top of each other (vs overlapping). */
   stacked?: boolean;
-  /** Render a soft fill gradient. Defaults to true for single-series. */
+  /**
+   * Render mode:
+   *   - "area" (default) — line + fill (gradient for single-series,
+   *      semi-transparent solid for multi).
+   *   - "line"           — strokes only, no fill. Use when the comparison
+   *      lives in the line shape (e.g. before/after curves where fills
+   *      would overlap and muddle readability).
+   */
+  mode?: "area" | "line";
+  /** Render a soft fill gradient. Defaults to true for single-series in area mode. */
   gradient?: boolean;
   /** Show the dashed horizontal grid lines. Default true. */
   showGrid?: boolean;
@@ -82,6 +91,7 @@ export function AreaChart<TData extends Record<string, unknown>>({
   xKey,
   series,
   stacked,
+  mode = "area",
   gradient,
   showGrid = true,
   className,
@@ -92,8 +102,10 @@ export function AreaChart<TData extends Record<string, unknown>>({
   tooltipFormatter,
 }: AreaChartProps<TData>) {
   // Single-series charts read better with a soft fill gradient; stacked
-  // multi-series look cleaner with flat semi-transparent fills.
-  const useGradient = gradient ?? series.length === 1;
+  // multi-series look cleaner with flat semi-transparent fills. Line
+  // mode skips fills entirely.
+  const useGradient = mode === "area" && (gradient ?? series.length === 1);
+  const useFill = mode === "area";
 
   const colorFor = (series_: AreaSeries, index: number) =>
     series_.color ?? colorForSeriesIndex(index);
@@ -181,8 +193,9 @@ export function AreaChart<TData extends Record<string, unknown>>({
                 stroke={color}
                 strokeWidth={2}
                 fill={useGradient ? `url(#area-gradient-${s.key})` : color}
-                fillOpacity={useGradient ? 1 : 0.5}
+                fillOpacity={useFill ? (useGradient ? 1 : 0.5) : 0}
                 isAnimationActive={false}
+                connectNulls
               />
             );
           })}
