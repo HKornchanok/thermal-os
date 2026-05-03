@@ -183,7 +183,9 @@ export default function DecisionsPage() {
         </p>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+      {/* min-h-8 reserves the height of the Clear button (h-8) so the row
+          doesn't grow when filters become active and shift the table down. */}
+      <div className="mt-4 flex min-h-8 flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           Per page
           <select
