@@ -28,47 +28,70 @@ import {
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
-/** Day-start ISO for a YYYY-MM-DD string. */
-function dayStart(yyyyMmDd: string): string {
-  return `${yyyyMmDd}T00:00:00Z`;
+/** Convert a datetime-local value (`YYYY-MM-DDTHH:MM`, local TZ) to ISO UTC. */
+function localDatetimeToIso(local: string): string {
+  // `new Date("YYYY-MM-DDTHH:MM")` parses in the browser's local zone;
+  // toISOString() then renders the equivalent UTC instant.
+  return new Date(local).toISOString();
 }
 
-/** Day after `yyyyMmDd` at 00:00 — used for inclusive end-of-day filters. */
-function dayAfter(yyyyMmDd: string): string {
-  const next = new Date(`${yyyyMmDd}T00:00:00Z`);
-  next.setUTCDate(next.getUTCDate() + 1);
-  return next.toISOString().replace(/\.\d+Z$/, "Z");
+/** Day-start ISO for a YYYY-MM-DD value, in the browser's local zone. */
+function localDateStart(yyyyMmDd: string): string {
+  // Same idea — interpret midnight in local time, render UTC.
+  return new Date(`${yyyyMmDd}T00:00:00`).toISOString();
+}
+
+/** The next day's local midnight as ISO UTC — exclusive end-of-day. */
+function localDateAfter(yyyyMmDd: string): string {
+  const d = new Date(`${yyyyMmDd}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  return d.toISOString();
+}
+
+/** One second after the given local datetime, as ISO UTC. */
+function plusOneSecondIso(local: string): string {
+  const d = new Date(local);
+  d.setSeconds(d.getSeconds() + 1);
+  return d.toISOString();
 }
 
 /**
  * Translate a per-column date filter (with operator) into the backend's
  * half-open `from <= recorded < to` range params.
  *
- * Operator → range mapping (all dates are wall-clock dates from
- * <input type="date">, interpreted in UTC):
+ * Inputs are wall-clock — `on` is `YYYY-MM-DD` (whole day), every other
+ * operator uses datetime-local `YYYY-MM-DDTHH:MM` interpreted in the
+ * user's browser zone. Outputs are ISO 8601 UTC.
  *
- *   between { from: A, to: B } → from = startOf(A), to = startOf(B+1)
- *                                (inclusive of both endpoints)
- *   on      { value: D }       → from = startOf(D), to = startOf(D+1)
- *   before  { value: D }       → to = startOf(D)        (strictly before)
- *   after   { value: D }       → from = startOf(D+1)    (strictly after)
+ *   between A..B    → from = A,        to = B + 1s   (inclusive both ends)
+ *   on D            → from = startOf(D), to = startOf(D + 1d)
+ *   before T        → to   = T            (strictly < T)
+ *   same_or_before T→ to   = T + 1s       (≤ T)
+ *   after T         → from = T + 1s       (strictly > T)
+ *   same_or_after T → from = T            (≥ T)
  */
 function dateFilterToRange(v: DateFilterValue): { from?: string; to?: string } {
   switch (v.op) {
     case "between": {
       const out: { from?: string; to?: string } = {};
-      if (v.from) out.from = dayStart(v.from);
-      if (v.to) out.to = dayAfter(v.to);
+      if (v.from) out.from = localDatetimeToIso(v.from);
+      // Treat the `to` bound as inclusive: backend uses `recorded < to`,
+      // so add a second so equality at the bound is included.
+      if (v.to) out.to = plusOneSecondIso(v.to);
       return out;
     }
     case "on":
       return v.value
-        ? { from: dayStart(v.value), to: dayAfter(v.value) }
+        ? { from: localDateStart(v.value), to: localDateAfter(v.value) }
         : {};
     case "before":
-      return v.value ? { to: dayStart(v.value) } : {};
+      return v.value ? { to: localDatetimeToIso(v.value) } : {};
+    case "same_or_before":
+      return v.value ? { to: plusOneSecondIso(v.value) } : {};
     case "after":
-      return v.value ? { from: dayAfter(v.value) } : {};
+      return v.value ? { from: plusOneSecondIso(v.value) } : {};
+    case "same_or_after":
+      return v.value ? { from: localDatetimeToIso(v.value) } : {};
   }
 }
 

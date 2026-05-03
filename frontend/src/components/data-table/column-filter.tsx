@@ -41,24 +41,71 @@ declare module "@tanstack/react-table" {
 
 // ---------------------------------------------------------------------
 // Date filter shape — discriminated union by operator.
+//
+// `value` for "on" is a date-only YYYY-MM-DD (treated as a whole day).
+// `from`/`to`/`value` for the other operators is a datetime-local
+// string in the user's local time zone (`YYYY-MM-DDTHH:MM`). The page
+// converts these to ISO 8601 UTC when sending to the backend.
 // ---------------------------------------------------------------------
 
-export type DateFilterOp = "between" | "on" | "before" | "after";
+export type DateFilterOp =
+  | "between"
+  | "on"
+  | "before"
+  | "same_or_before"
+  | "after"
+  | "same_or_after";
 
 export type DateFilterValue =
   | { op: "between"; from?: string; to?: string }
   | { op: "on"; value?: string }
-  | { op: "before"; value?: string }
-  | { op: "after"; value?: string };
+  | {
+      op: "before" | "same_or_before" | "after" | "same_or_after";
+      value?: string;
+    };
 
 const DATE_OP_OPTIONS: { value: DateFilterOp; label: string }[] = [
   { value: "between", label: "Between" },
   { value: "on", label: "On" },
   { value: "before", label: "Before" },
+  { value: "same_or_before", label: "Same or before" },
   { value: "after", label: "After" },
+  { value: "same_or_after", label: "Same or after" },
 ];
 
-/** Treat a date filter as inactive if the operator's value(s) are blank. */
+const DATE_ONLY_OPS = new Set<DateFilterOp>(["on"]);
+
+/** YYYY-MM-DDTHH:MM in the browser's local time, suitable for datetime-local. */
+function nowDatetimeLocal(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+    `T${pad(now.getHours())}:${pad(now.getMinutes())}`
+  );
+}
+
+/** YYYY-MM-DD in the browser's local time, suitable for date inputs. */
+function todayDate(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** Sensible default value for an operator — the current local moment. */
+function defaultValueForOp(op: DateFilterOp): DateFilterValue {
+  const dt = nowDatetimeLocal();
+  switch (op) {
+    case "between":
+      return { op, from: dt, to: dt };
+    case "on":
+      return { op, value: todayDate() };
+    default:
+      return { op, value: dt };
+  }
+}
+
+/** Whether a date filter holds enough data to be considered active. */
 function isDateFilterActive(v: DateFilterValue | undefined): boolean {
   if (!v) return false;
   if (v.op === "between") return !!(v.from || v.to);
@@ -184,15 +231,16 @@ function FilterInput<TData>({
   }
 
   if (variant === "date") {
-    const current = (column.getFilterValue() as DateFilterValue | undefined) ?? {
-      op: "between",
-    };
+    // No filter set yet → default to current time when the user picks
+    // an operator (rather than starting from a blank field). The
+    // operator dropdown also seeds an initial value so the filter is
+    // immediately usable without typing the whole datetime.
+    const current =
+      (column.getFilterValue() as DateFilterValue | undefined) ??
+      defaultValueForOp("between");
 
     const setOp = (op: DateFilterOp) => {
-      // Reset the value side of the union when changing operator so we
-      // don't carry stale `from`/`to` into single-date ops or vice versa.
-      if (op === "between") column.setFilterValue({ op });
-      else column.setFilterValue({ op });
+      column.setFilterValue(defaultValueForOp(op));
     };
 
     return (
@@ -216,7 +264,11 @@ function FilterInput<TData>({
         {current.op === "between" ? (
           <BetweenInputs column={column} value={current} />
         ) : (
-          <SingleDateInput column={column} value={current} />
+          <SingleDateInput
+            column={column}
+            value={current}
+            inputType={DATE_ONLY_OPS.has(current.op) ? "date" : "datetime-local"}
+          />
         )}
       </div>
     );
@@ -242,7 +294,7 @@ function BetweenInputs<TData>({
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         From
         <input
-          type="date"
+          type="datetime-local"
           data-testid={`filter-${column.id}-from`}
           value={value.from ?? ""}
           onChange={(e) =>
@@ -254,7 +306,7 @@ function BetweenInputs<TData>({
       <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         To
         <input
-          type="date"
+          type="datetime-local"
           data-testid={`filter-${column.id}-to`}
           value={value.to ?? ""}
           onChange={(e) =>
@@ -270,9 +322,14 @@ function BetweenInputs<TData>({
 function SingleDateInput<TData>({
   column,
   value,
+  inputType,
 }: {
   column: Column<TData, unknown>;
-  value: Extract<DateFilterValue, { op: "on" | "before" | "after" }>;
+  value: Extract<
+    DateFilterValue,
+    { op: "on" | "before" | "same_or_before" | "after" | "same_or_after" }
+  >;
+  inputType: "date" | "datetime-local";
 }) {
   const update = (next: string) => {
     if (!next) column.setFilterValue({ op: value.op });
@@ -281,9 +338,9 @@ function SingleDateInput<TData>({
 
   return (
     <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-      Date
+      {inputType === "date" ? "Date" : "Date & time"}
       <input
-        type="date"
+        type={inputType}
         data-testid={`filter-${column.id}-value`}
         value={value.value ?? ""}
         onChange={(e) => update(e.target.value)}
