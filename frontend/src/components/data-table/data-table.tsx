@@ -187,7 +187,10 @@ export function DataTable<TData, TValue>({
                         explicit ? { minWidth: `${explicit}px` } : undefined
                       }
                     >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
                     </TableCell>
                   );
                 })}
@@ -220,8 +223,14 @@ function DataTableFooter<TData>({
   isFetching?: boolean;
   testIds?: DataTableProps<unknown, unknown>["testIds"];
 }) {
-  const { page, totalPages, onPageChange, pageSize, pageSizeOptions, onPageSizeChange } =
-    pagination;
+  const {
+    page,
+    totalPages,
+    onPageChange,
+    pageSize,
+    pageSizeOptions,
+    onPageSizeChange,
+  } = pagination;
   const canPrev = page > 1;
   const canNext = page < totalPages;
   const hasActiveFilter = table.getState().columnFilters.length > 0;

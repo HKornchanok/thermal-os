@@ -44,7 +44,10 @@ export function Sidebar() {
   // next paint (transition-[width] keeps it visually smooth).
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
-    if (typeof window !== "undefined" && localStorage.getItem(STORAGE_KEY) === "true") {
+    if (
+      typeof window !== "undefined" &&
+      localStorage.getItem(STORAGE_KEY) === "true"
+    ) {
       setCollapsed(true);
     }
   }, []);
@@ -79,7 +82,9 @@ export function Sidebar() {
         {!collapsed && (
           <div className="min-w-0">
             <h1 className="truncate text-base font-semibold">ThermalOS</h1>
-            <p className="truncate text-xs text-muted-foreground">Building monitor</p>
+            <p className="truncate text-xs text-muted-foreground">
+              Building monitor
+            </p>
           </div>
         )}
         <Button

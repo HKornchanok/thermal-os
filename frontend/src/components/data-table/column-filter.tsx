@@ -243,7 +243,9 @@ function FilterInput<TData>({
           <SingleDateInput
             column={column}
             value={current}
-            inputType={DATE_ONLY_OPS.has(current.op) ? "date" : "datetime-local"}
+            inputType={
+              DATE_ONLY_OPS.has(current.op) ? "date" : "datetime-local"
+            }
           />
         )}
       </div>
@@ -295,7 +297,11 @@ function BetweenInputs<TData>({
   );
 }
 
-function MultiSelectFilter<TData>({ column }: { column: Column<TData, unknown> }) {
+function MultiSelectFilter<TData>({
+  column,
+}: {
+  column: Column<TData, unknown>;
+}) {
   const options = column.columnDef.meta?.filterOptions ?? [];
   // The stored value is an array of selected option `value`s. Empty / undefined
   // means "no filter" (show all rows).

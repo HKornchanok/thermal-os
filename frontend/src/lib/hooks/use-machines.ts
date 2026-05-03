@@ -16,7 +16,8 @@ export function useMachines() {
 
   return useQuery<Machine[]>({
     queryKey: ["machines"],
-    queryFn: ({ signal }) => apiFetch<Machine[]>("/api/machines/", { token, signal }),
+    queryFn: ({ signal }) =>
+      apiFetch<Machine[]>("/api/machines/", { token, signal }),
     enabled: !!token,
     refetchInterval: 30_000,
   });

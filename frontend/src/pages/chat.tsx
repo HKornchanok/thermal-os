@@ -43,7 +43,10 @@ export default function ChatPage() {
 
     try {
       const resp = await chat.mutateAsync({ message: trimmed });
-      setMessages((prev) => [...prev, { role: "assistant", content: resp.reply }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: resp.reply },
+      ]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       setMessages((prev) => [
@@ -160,8 +163,8 @@ function EmptyChat({
           Ask anything about the building
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Replies are grounded in the latest sensor snapshot, energy totals,
-          and the last 20 AI decisions.
+          Replies are grounded in the latest sensor snapshot, energy totals, and
+          the last 20 AI decisions.
         </p>
       </div>
       <div className="flex flex-wrap justify-center gap-2">
@@ -197,17 +200,14 @@ function MessageBubble({
   return (
     <div
       data-testid={testId ?? `chat-msg-${role}`}
-      className={cn(
-        "flex w-full",
-        isUser ? "justify-end" : "justify-start"
-      )}
+      className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
     >
       <div
         className={cn(
           "max-w-[85%] whitespace-pre-wrap rounded-lg border px-3 py-2 text-sm",
           isUser
             ? "border-primary/40 bg-primary/10 text-foreground"
-            : "border-border bg-muted/40 text-foreground"
+            : "bg-muted/40 border-border text-foreground"
         )}
       >
         {content}

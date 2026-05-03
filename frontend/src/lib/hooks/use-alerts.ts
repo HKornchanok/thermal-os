@@ -18,7 +18,8 @@ export function useAlerts() {
 
   return useQuery<Alert[]>({
     queryKey: ["alerts"],
-    queryFn: ({ signal }) => apiFetch<Alert[]>("/api/alerts/", { token, signal }),
+    queryFn: ({ signal }) =>
+      apiFetch<Alert[]>("/api/alerts/", { token, signal }),
     enabled: !!token,
     refetchInterval: 30_000,
   });

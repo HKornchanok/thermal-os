@@ -54,7 +54,9 @@ export default function MachinesPage() {
     return raw && Number.isFinite(n) && n > 0 ? n : null;
   }, [router.query.selected]);
 
-  const [selectedId, setSelectedId] = useState<number | null>(selectedFromQuery);
+  const [selectedId, setSelectedId] = useState<number | null>(
+    selectedFromQuery
+  );
   useEffect(() => {
     setSelectedId(selectedFromQuery);
   }, [selectedFromQuery]);
@@ -155,7 +157,8 @@ export default function MachinesPage() {
                 {selectedMachine.name}
               </h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {selectedMachine.zone} · {selectedMachine.machine_type.replace("_", " ")}
+                {selectedMachine.zone} ·{" "}
+                {selectedMachine.machine_type.replace("_", " ")}
               </p>
             </div>
             {selectedMachine.latest_reading && (
@@ -206,7 +209,8 @@ export default function MachinesPage() {
                 className="p-6 text-center text-sm text-muted-foreground"
                 data-testid="sensors-empty"
               >
-                No data for {ALL_METRICS.find((m) => m.value === metric)?.label}.
+                No data for {ALL_METRICS.find((m) => m.value === metric)?.label}
+                .
               </p>
             ) : (
               <AreaChart

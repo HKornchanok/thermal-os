@@ -173,7 +173,9 @@ export function AreaChart<TData extends Record<string, unknown>>({
             cursor={{
               // Fall back to the first theme colour when callers pass an
               // empty `series` array (e.g. user has unchecked every zone).
-              stroke: series[0] ? colorFor(series[0], 0) : colorForSeriesIndex(0),
+              stroke: series[0]
+                ? colorFor(series[0], 0)
+                : colorForSeriesIndex(0),
               strokeWidth: 1,
               strokeDasharray: "2 4",
             }}

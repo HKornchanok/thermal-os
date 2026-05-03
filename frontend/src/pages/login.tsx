@@ -40,7 +40,7 @@ export default function Login() {
       <Head>
         <title>Sign in · ThermalOS</title>
       </Head>
-      <main className="relative min-h-screen grid place-items-center bg-background text-foreground">
+      <main className="relative grid min-h-screen place-items-center bg-background text-foreground">
         <div className="absolute right-4 top-4">
           <ThemeToggle />
         </div>
@@ -78,7 +78,12 @@ export default function Login() {
             />
           </label>
 
-          <Button data-testid="submit" type="submit" disabled={loading} className="font-semibold">
+          <Button
+            data-testid="submit"
+            type="submit"
+            disabled={loading}
+            className="font-semibold"
+          >
             {loading ? "Signing in…" : "Sign in"}
           </Button>
 
