@@ -86,12 +86,19 @@ def test_compare_default_shows_ai_savings(admin_client):
 
 
 def test_compare_savings_pct_arithmetic(admin_client):
-    """savings_pct = (before − after) / before × 100, rounded to 2dp."""
+    """savings_pct = (before − after) / before × 100, rounded to 2dp.
+
+    The view computes savings_pct from un-rounded avg_kw values then
+    rounds, while we can only see the rounded values from the response —
+    so allow ±0.01 to absorb the legitimate rounding-after-rounding
+    boundary case (e.g., un-rounded 20.895 rounds to 20.90 from the view,
+    but recomputing from the already-rounded avg_kw can land at 20.89).
+    """
     body = admin_client.get("/api/energy/compare/").json()
     before = body["before"]["avg_kw"]
     after = body["after"]["avg_kw"]
     expected = round((before - after) / before * 100.0, 2)
-    assert body["savings_pct"] == expected
+    assert body["savings_pct"] == pytest.approx(expected, abs=0.01)
 
 
 # ---------- Equal periods -> ~0% savings ------------------------------------
