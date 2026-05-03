@@ -31,5 +31,20 @@ services:
     volumes:
       - ./backend:/app
 
+  frontend:
+    build: ./frontend
+    environment:
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-dev-only-thermalos-nextauth-secret-change-me-32}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+
 volumes:
   pgdata:
