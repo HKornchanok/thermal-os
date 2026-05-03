@@ -11,11 +11,11 @@ import {
 import {
   CHART_AXIS_STYLE,
   CHART_GRID_STROKE,
-  CHART_SERIES_COLORS,
   CHART_TOOLTIP_CONTENT_STYLE,
   CHART_TOOLTIP_ITEM_STYLE,
   CHART_TOOLTIP_LABEL_STYLE,
   CHART_TOOLTIP_WRAPPER_STYLE,
+  colorForSeriesIndex,
 } from "@/lib/chart";
 import { cn } from "@/lib/utils";
 
@@ -88,7 +88,7 @@ export function AreaChart<TData extends Record<string, unknown>>({
   const useGradient = gradient ?? series.length === 1;
 
   const colorFor = (series_: AreaSeries, index: number) =>
-    series_.color ?? CHART_SERIES_COLORS[index % CHART_SERIES_COLORS.length];
+    series_.color ?? colorForSeriesIndex(index);
 
   return (
     <div className={cn(className ?? "h-72 w-full")}>
@@ -150,7 +150,9 @@ export function AreaChart<TData extends Record<string, unknown>>({
             labelStyle={CHART_TOOLTIP_LABEL_STYLE}
             itemStyle={CHART_TOOLTIP_ITEM_STYLE}
             cursor={{
-              stroke: colorFor(series[0]!, 0),
+              // Fall back to the first theme colour when callers pass an
+              // empty `series` array (e.g. user has unchecked every zone).
+              stroke: series[0] ? colorFor(series[0], 0) : colorForSeriesIndex(0),
               strokeWidth: 1,
               strokeDasharray: "2 4",
             }}
