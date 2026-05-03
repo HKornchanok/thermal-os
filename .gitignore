@@ -25,6 +25,7 @@ node_modules/
 .next/
 out/
 .turbo/
+*.tsbuildinfo
 
 # Husky auto-generated bootstrap scripts (committed hook scripts live
 # alongside, e.g. frontend/.husky/pre-commit, and ARE tracked).

@@ -33,7 +33,12 @@ export type AreaSeries = {
   color?: string;
 };
 
-export interface AreaChartProps<TData extends Record<string, unknown>> {
+// Constrain to "any object shape" rather than Record<string, unknown> —
+// concrete domain types (BuildingEnergyPoint, SensorSeriesPoint, …) have
+// specific keys, not an index signature, so the stricter constraint
+// rejects them at the call site.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface AreaChartProps<TData extends Record<string, any>> {
   /** Time-ordered data rows. */
   data: TData[];
   /** Key in each row to use as the x-axis value. */
@@ -86,7 +91,8 @@ export interface AreaChartProps<TData extends Record<string, unknown>> {
  * lets callers stay focused on their data — no Recharts boilerplate per
  * page.
  */
-export function AreaChart<TData extends Record<string, unknown>>({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function AreaChart<TData extends Record<string, any>>({
   data,
   xKey,
   series,

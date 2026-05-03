@@ -11,9 +11,13 @@
  * uses OKLCH (see globals.css), and the values can't be re-wrapped.
  */
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, SVGProps } from "react";
 
-export const CHART_AXIS_STYLE: CSSProperties = {
+// Recharts' XAxis/YAxis `tick` prop receives SVG text props, not React
+// CSSProperties — the two overlap nominally but diverge on enums like
+// `alignmentBaseline`. Typing the constant as SVGProps<SVGTextElement>
+// matches the consumer signature exactly.
+export const CHART_AXIS_STYLE: SVGProps<SVGTextElement> = {
   fill: "var(--muted-foreground)",
   fontSize: 10,
   fontFamily: "var(--font-mono)",
