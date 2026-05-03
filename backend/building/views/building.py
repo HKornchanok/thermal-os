@@ -1,5 +1,6 @@
 """Building-wide aggregate endpoints."""
 
+from collections import defaultdict
 from datetime import timedelta
 
 from django.db import connection
@@ -153,3 +154,64 @@ def energy(request):
             for bucket, total_kw in rows
         ]
     )
+
+
+@api_view(["GET"])
+def energy_by_zone(request):
+    """Building power broken down by zone, pivoted for stacked area charts.
+
+    Query params (all optional):
+        from    ISO 8601 datetime  default = `to` − 24 hours
+        to      ISO 8601 datetime  default = MAX(recorded_at)
+        bucket  ∈ {15min, 1h}      default 1h
+
+    Returns:
+        [
+          { "bucket": "<iso>", "Zone A (Lobby & Ground)": 32.4, ... },
+          ...
+        ]
+
+    Every entry carries every known zone as a key. Zones with zero power
+    in a bucket are present with value 0.0 — keeps the stacked-area chart
+    series stable across the time axis.
+    """
+    bucket_alias = request.query_params.get("bucket", "1h")
+    if bucket_alias not in ALLOWED_BUCKETS_AGGREGATE:
+        return Response({"detail": f"Invalid bucket: {bucket_alias!r}"}, status=400)
+    bucket_interval = ALLOWED_BUCKETS_AGGREGATE[bucket_alias]
+
+    try:
+        from_dt = parse_iso_datetime(request.query_params.get("from"))
+        to_dt = parse_iso_datetime(request.query_params.get("to"))
+    except ValueError as e:
+        return Response({"detail": f"Invalid datetime: {e}"}, status=400)
+
+    if to_dt is None:
+        to_dt = get_max_recorded_at()
+        if to_dt is None:
+            return Response([])
+    if from_dt is None:
+        from_dt = to_dt - timedelta(hours=24)
+
+    sql_query = sql.ZONE_ENERGY_TPL.format(bucket_interval=bucket_interval)
+    with connection.cursor() as cursor:
+        cursor.execute(sql_query, [from_dt, to_dt])
+        rows = cursor.fetchall()  # (bucket, zone, total_kw)
+
+        cursor.execute(sql.ALL_ZONES)
+        all_zones = [r[0] for r in cursor.fetchall()]
+
+    # Pivot rows: bucket → {zone: total_kw}. defaultdict keeps the loop tight.
+    pivoted: dict = defaultdict(dict)
+    for bucket, zone, total_kw in rows:
+        pivoted[bucket][zone] = round(total_kw, 2) if total_kw else 0.0
+
+    # Emit chronological list, filling zero for any zone missing from a bucket
+    # so each entry has a stable shape for the chart series.
+    response = []
+    for bucket in sorted(pivoted.keys()):
+        entry = {"bucket": bucket.isoformat()}
+        for zone in all_zones:
+            entry[zone] = pivoted[bucket].get(zone, 0.0)
+        response.append(entry)
+    return Response(response)
