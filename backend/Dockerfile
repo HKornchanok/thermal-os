@@ -13,7 +13,7 @@ RUN apt-get update \
 
 COPY pyproject.toml ./
 RUN pip install --upgrade pip && \
-    pip install $(python -c "import tomllib; print(' '.join(tomllib.load(open('pyproject.toml','rb'))['project']['dependencies']))")
+    pip install $(python -c "import tomllib; p=tomllib.load(open('pyproject.toml','rb'))['project']; deps=p['dependencies']+p.get('optional-dependencies',{}).get('dev',[]); print(' '.join(deps))")
 
 COPY . .
 

@@ -19,7 +19,7 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: postgresql://thermalos:thermalos@db:5432/thermalos
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-change-me}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-change-me-thermalos-development-key-xxxx}
       DEBUG: "true"
       ALLOWED_HOSTS: "*"
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
