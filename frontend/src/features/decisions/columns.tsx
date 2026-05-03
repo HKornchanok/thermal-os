@@ -65,7 +65,7 @@ const formatDateTime = (iso: string): string =>
     minute: "2-digit",
   });
 
-/** Compact header row: label aligned left, optional filter trigger right. */
+/** Compact header row: label pinned left, optional filter trigger pinned right. */
 function HeaderShell({
   label,
   children,
@@ -74,7 +74,7 @@ function HeaderShell({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center justify-between gap-1">
       <span>{label}</span>
       {children}
     </div>
