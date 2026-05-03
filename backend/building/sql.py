@@ -42,3 +42,25 @@ SENSOR_TIMESERIES_TPL = """
     GROUP BY bucket
     ORDER BY bucket
 """
+
+
+# /api/building/summary/ — latest reading per machine joined to machine type.
+# DISTINCT ON walks the (machine_id, recorded_at DESC) index once per
+# machine — same plan as the LATERAL JOIN above, smaller select list.
+LATEST_FOR_SUMMARY = """
+    SELECT DISTINCT ON (sr.machine_id)
+        sr.machine_id, sr.status, sr.power_kw, sr.temperature, sr.setpoint, m.machine_type
+    FROM building_sensorreading sr
+    JOIN building_machine m ON m.id = sr.machine_id
+    ORDER BY sr.machine_id, sr.recorded_at DESC
+"""
+
+
+# /api/building/summary/ — total kWh in a window. Each reading is a 5-min
+# sample; multiplying SUM(kw) by 5/60 converts to kWh. The COALESCE keeps
+# the result a float (not NULL) when the window is empty.
+KWH_BETWEEN = """
+    SELECT COALESCE(SUM(power_kw), 0) * 5.0 / 60.0 AS kwh
+    FROM building_sensorreading
+    WHERE recorded_at >= %s AND recorded_at < %s
+"""
