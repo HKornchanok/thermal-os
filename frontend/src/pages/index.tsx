@@ -3,6 +3,9 @@ import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/router";
 import { useEffect } from "react";
 
+import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
+
 export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -14,7 +17,9 @@ export default function Home() {
   }, [status, router]);
 
   if (status === "loading") {
-    return <p style={{ padding: 24, fontFamily: "system-ui" }}>Loading…</p>;
+    return (
+      <p className="p-6 text-muted-foreground">Loading…</p>
+    );
   }
   if (!session) return null;
 
@@ -28,60 +33,37 @@ export default function Home() {
       <Head>
         <title>ThermalOS</title>
       </Head>
-      <main
-        style={{
-          maxWidth: 640,
-          margin: "10vh auto",
-          padding: 24,
-          fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-          color: "#e6edf3",
-          background: "#0f1419",
-          minHeight: "100vh",
-          boxSizing: "border-box",
-        }}
-      >
-        <h1 style={{ marginTop: 0 }}>ThermalOS</h1>
+      <main className="mx-auto box-border min-h-screen max-w-2xl px-6 py-20 text-foreground">
+        <h1 className="mt-0 text-2xl font-semibold">ThermalOS</h1>
         <p data-testid="signed-in-as">
           Signed in as <strong>{session.user?.name}</strong>.
         </p>
 
-        <section
-          style={{
-            background: "#1a2028",
-            border: "1px solid #303942",
-            borderRadius: 8,
-            padding: 16,
-            margin: "16px 0",
-          }}
-        >
-          <h2 style={{ marginTop: 0, fontSize: 14, opacity: 0.8 }}>
-            Auth proof
-          </h2>
-          <p style={{ fontSize: 13, margin: "4px 0" }}>
+        <section className="my-4 rounded-lg border border-border bg-card p-4 text-card-foreground">
+          <h2 className="mt-0 text-sm font-medium text-muted-foreground">Auth proof</h2>
+          <p className="my-1 text-xs">
             <strong>accessToken:</strong>{" "}
-            <code data-testid="access-token-preview">{accessPreview}</code>
+            <code data-testid="access-token-preview" className="font-mono">
+              {accessPreview}
+            </code>
           </p>
           {session.error && (
-            <p style={{ color: "#ff6b6b", fontSize: 13 }}>
-              Token error: <code>{session.error}</code>
+            <p className="text-xs text-destructive">
+              Token error: <code className="font-mono">{session.error}</code>
             </p>
           )}
         </section>
 
-        <button
-          data-testid="signout"
-          onClick={() => signOut({ callbackUrl: "/login" })}
-          style={{
-            padding: "8px 14px",
-            background: "transparent",
-            color: "#e6edf3",
-            border: "1px solid #303942",
-            borderRadius: 6,
-            cursor: "pointer",
-          }}
-        >
-          Sign out
-        </button>
+        <div className="flex items-center gap-2">
+          <Button
+            data-testid="signout"
+            variant="outline"
+            onClick={() => signOut({ callbackUrl: "/login" })}
+          >
+            Sign out
+          </Button>
+          <ThemeToggle />
+        </div>
       </main>
     </>
   );
