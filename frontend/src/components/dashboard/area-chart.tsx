@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import {
   Area,
   AreaChart as RechartsAreaChart,
@@ -8,6 +9,13 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import type { ValueType } from "recharts/types/component/DefaultTooltipContent";
+import type { TooltipProps } from "recharts";
+
+// Recharts' Tooltip is generic in (value, name). We pin name to `string`
+// because every series in our charts uses a string label — keeps the
+// tooltip content callback type usable downstream without union noise.
+export type ChartTooltipProps = TooltipProps<ValueType, string>;
 
 import {
   CHART_AXIS_STYLE,
@@ -91,6 +99,15 @@ export interface AreaChartProps<TData extends Record<string, any>> {
     value: unknown,
     name: string
   ) => [string, string] | string;
+  /**
+   * Optional fully-custom tooltip body. When supplied, replaces the
+   * default Recharts tooltip content entirely — gives the caller access
+   * to the full payload for cases the per-row `tooltipFormatter` can't
+   * handle (e.g. computing a delta between two series). The function
+   * receives the same `TooltipProps` Recharts passes its own content
+   * component; return null to render nothing for an inactive cursor.
+   */
+  tooltipContent?: (props: ChartTooltipProps) => ReactElement | null;
 }
 
 /**
@@ -115,6 +132,7 @@ export function AreaChart<TData extends Record<string, any>>({
   yTickFormatter,
   tooltipLabelFormatter,
   tooltipFormatter,
+  tooltipContent,
 }: AreaChartProps<TData>) {
   // Single-series charts read better with a soft fill gradient; stacked
   // multi-series look cleaner with flat semi-transparent fills. Line
@@ -207,6 +225,7 @@ export function AreaChart<TData extends Record<string, any>>({
             }}
             labelFormatter={tooltipLabelFormatter}
             formatter={tooltipFormatter}
+            content={tooltipContent}
           />
 
           {nowLine !== undefined && (
