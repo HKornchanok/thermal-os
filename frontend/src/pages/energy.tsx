@@ -11,6 +11,13 @@ import {
   formatBucketLabel,
   formatBucketTime,
 } from "@/lib/chart";
+import {
+  dayEndIso,
+  dayStartIso,
+  formatDayLabel,
+  shiftDay,
+  todayLocal,
+} from "@/lib/dates";
 import { useBuildingEnergy } from "@/lib/hooks/use-building-energy";
 import { useBuildingEnergyByZone } from "@/lib/hooks/use-building-energy-by-zone";
 import { cn, fmtNum } from "@/lib/utils";
@@ -26,40 +33,6 @@ const VIEW_OPTIONS = [
 ] as const;
 
 type View = (typeof VIEW_OPTIONS)[number]["value"];
-
-/** YYYY-MM-DD in the browser's local zone, suitable for `<input type=date>` and ISO conversion. */
-function todayLocal(): string {
-  const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function shiftDay(yyyyMmDd: string, deltaDays: number): string {
-  const d = new Date(`${yyyyMmDd}T00:00:00`);
-  d.setDate(d.getDate() + deltaDays);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function dayStartIso(yyyyMmDd: string): string {
-  return new Date(`${yyyyMmDd}T00:00:00`).toISOString();
-}
-
-function dayEndIso(yyyyMmDd: string): string {
-  const d = new Date(`${yyyyMmDd}T00:00:00`);
-  d.setDate(d.getDate() + 1);
-  return d.toISOString();
-}
-
-function formatDayLabel(yyyyMmDd: string): string {
-  const d = new Date(`${yyyyMmDd}T00:00:00`);
-  return d.toLocaleDateString(undefined, {
-    weekday: "short",
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  });
-}
 
 export default function EnergyPage() {
   // `day` is the user's explicit selection. Empty means "show the

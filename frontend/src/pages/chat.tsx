@@ -27,13 +27,16 @@ export default function ChatPage() {
   const chat = useChat();
 
   // Auto-scroll the transcript to the bottom as new messages land.
+  // Depend only on `messages` — including `chat.isPending` here would
+  // re-fire smooth-scroll on every pending toggle, fighting any user
+  // scroll-up during the "Thinking…" phase.
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages, chat.isPending]);
+  }, [messages]);
 
   const send = async (text: string) => {
     const trimmed = text.trim();

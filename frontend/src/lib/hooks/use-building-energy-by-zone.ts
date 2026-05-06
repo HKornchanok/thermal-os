@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 
-import { apiFetch, type ZoneEnergyPoint } from "@/lib/api";
+import { apiFetch, toSearchParams, type ZoneEnergyPoint } from "@/lib/api";
 
 export type BuildingEnergyByZoneParams = {
   /** ISO 8601. Server defaults to `to` − 24 hours. */
@@ -31,13 +31,7 @@ export function useBuildingEnergyByZone(
   return useQuery<ZoneEnergyPoint[]>({
     queryKey: ["building-energy-by-zone", params],
     queryFn: ({ signal }) => {
-      const sp = new URLSearchParams();
-      if (params.from) sp.set("from", params.from);
-      if (params.to) sp.set("to", params.to);
-      if (params.bucket) sp.set("bucket", params.bucket);
-      const path = `/api/building/energy/by-zone/${
-        sp.toString() ? `?${sp}` : ""
-      }`;
+      const path = `/api/building/energy/by-zone/${toSearchParams(params)}`;
       return apiFetch<ZoneEnergyPoint[]>(path, { token, signal });
     },
     enabled: !!token,

@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 
-import { apiFetch, type BuildingEnergyPoint } from "@/lib/api";
+import { apiFetch, toSearchParams, type BuildingEnergyPoint } from "@/lib/api";
 
 export type BuildingEnergyParams = {
   /** ISO 8601. Server defaults to `to` − 24 hours. */
@@ -27,11 +27,7 @@ export function useBuildingEnergy(params: BuildingEnergyParams = {}) {
   return useQuery<BuildingEnergyPoint[]>({
     queryKey: ["building-energy", params],
     queryFn: ({ signal }) => {
-      const sp = new URLSearchParams();
-      if (params.from) sp.set("from", params.from);
-      if (params.to) sp.set("to", params.to);
-      if (params.bucket) sp.set("bucket", params.bucket);
-      const path = `/api/building/energy/${sp.toString() ? `?${sp}` : ""}`;
+      const path = `/api/building/energy/${toSearchParams(params)}`;
       return apiFetch<BuildingEnergyPoint[]>(path, { token, signal });
     },
     enabled: !!token,

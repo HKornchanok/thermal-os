@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 
-import { apiFetch, type EnergyCompare } from "@/lib/api";
+import { apiFetch, toSearchParams, type EnergyCompare } from "@/lib/api";
 
 export type EnergyCompareParams = {
   /** Period A (typically "before AI"). All four params optional. */
@@ -30,12 +30,7 @@ export function useEnergyCompare(params: EnergyCompareParams = {}) {
   return useQuery<EnergyCompare>({
     queryKey: ["energy-compare", params],
     queryFn: ({ signal }) => {
-      const sp = new URLSearchParams();
-      if (params.a_from) sp.set("a_from", params.a_from);
-      if (params.a_to) sp.set("a_to", params.a_to);
-      if (params.b_from) sp.set("b_from", params.b_from);
-      if (params.b_to) sp.set("b_to", params.b_to);
-      const path = `/api/energy/compare/${sp.toString() ? `?${sp}` : ""}`;
+      const path = `/api/energy/compare/${toSearchParams(params)}`;
       return apiFetch<EnergyCompare>(path, { token, signal });
     },
     enabled: !!token,

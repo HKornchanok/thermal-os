@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react";
 
 import {
   apiFetch,
+  toSearchParams,
   type Decision,
   type DecisionAction,
   type Paginated,
@@ -38,23 +39,10 @@ export function useDecisions(params: DecisionsParams = {}) {
   return useQuery<Paginated<Decision>>({
     queryKey: ["decisions", params],
     queryFn: ({ signal }) => {
-      const search = buildSearchParams(params);
-      const path = `/api/decisions/${search ? `?${search}` : ""}`;
+      const path = `/api/decisions/${toSearchParams(params)}`;
       return apiFetch<Paginated<Decision>>(path, { token, signal });
     },
     enabled: !!token,
     placeholderData: keepPreviousData,
   });
-}
-
-function buildSearchParams(params: DecisionsParams): string {
-  const sp = new URLSearchParams();
-  if (params.from) sp.set("from", params.from);
-  if (params.to) sp.set("to", params.to);
-  if (params.action && params.action.length > 0) {
-    sp.set("action", params.action.join(","));
-  }
-  if (params.page) sp.set("page", String(params.page));
-  if (params.page_size) sp.set("page_size", String(params.page_size));
-  return sp.toString();
 }

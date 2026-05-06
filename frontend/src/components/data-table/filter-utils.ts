@@ -1,33 +1,24 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
 
+import { dayEndIso, dayStartIso } from "@/lib/dates";
+
 import type { DateFilterValue } from "./column-filter";
 
 // =====================================================================
-// Datetime helpers
+// Datetime helpers specific to the column-filter operators.
 //
-// All inputs here are wall-clock strings as produced by HTML inputs:
-//   <input type="date">           → "YYYY-MM-DD"
-//   <input type="datetime-local"> → "YYYY-MM-DDTHH:MM"
-// Both are interpreted in the user's BROWSER timezone (`new Date(...)`
-// without a Z suffix). The output is always ISO 8601 UTC, ready to send
-// to the backend.
+// `<input type="datetime-local">` produces "YYYY-MM-DDTHH:MM" (no zone),
+// which `new Date(local)` parses in the browser's local zone. Output is
+// always ISO 8601 UTC ready for the backend's `from`/`to` params.
+//
+// Date-only helpers (`<input type="date">` shape) are imported from
+// `@/lib/dates` so /energy, /compare, and the column-filter operators
+// all share one canonical implementation.
 // =====================================================================
 
 /** Convert a datetime-local value to ISO UTC. */
 export function localDatetimeToIso(local: string): string {
   return new Date(local).toISOString();
-}
-
-/** Local-zone midnight of the given YYYY-MM-DD, as ISO UTC. */
-export function localDateStart(yyyyMmDd: string): string {
-  return new Date(`${yyyyMmDd}T00:00:00`).toISOString();
-}
-
-/** Next day's local midnight, as ISO UTC — exclusive end-of-day. */
-export function localDateAfter(yyyyMmDd: string): string {
-  const d = new Date(`${yyyyMmDd}T00:00:00`);
-  d.setDate(d.getDate() + 1);
-  return d.toISOString();
 }
 
 /** One second after the given local datetime, as ISO UTC. */
@@ -65,7 +56,7 @@ export function dateFilterToRange(v: DateFilterValue): {
     }
     case "on":
       return v.value
-        ? { from: localDateStart(v.value), to: localDateAfter(v.value) }
+        ? { from: dayStartIso(v.value), to: dayEndIso(v.value) }
         : {};
     case "before":
       return v.value ? { to: localDatetimeToIso(v.value) } : {};
@@ -86,6 +77,31 @@ export function dateFilterToRange(v: DateFilterValue): {
 // into the API param the backend expects. Pages compose the results.
 // =====================================================================
 
+// TanStack stores filter values as `unknown`. Validate the shape at the
+// boundary instead of casting, so a column whose `filterVariant` got
+// wired to a different value shape doesn't silently corrupt downstream
+// API params. The runtime cost is negligible — these run once per
+// render's filter list (typically 0–3 entries).
+
+const KNOWN_DATE_OPS = new Set([
+  "between",
+  "on",
+  "before",
+  "same_or_before",
+  "after",
+  "same_or_after",
+]);
+
+function isDateFilterValue(v: unknown): v is DateFilterValue {
+  if (!v || typeof v !== "object") return false;
+  const op = (v as { op?: unknown }).op;
+  return typeof op === "string" && KNOWN_DATE_OPS.has(op);
+}
+
+function isStringArray(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every((x) => typeof x === "string");
+}
+
 /**
  * Read a date filter from columnFilters and translate it into half-open
  * `{ from?, to? }` ISO UTC ranges via dateFilterToRange. Returns `{}`
@@ -97,10 +113,8 @@ export function extractDateRangeFromColumnFilters(
   columnId: string
 ): { from?: string; to?: string } {
   const f = filters.find((x) => x.id === columnId);
-  if (!f) return {};
-  const value = f.value as DateFilterValue | undefined;
-  if (!value) return {};
-  return dateFilterToRange(value);
+  if (!f || !isDateFilterValue(f.value)) return {};
+  return dateFilterToRange(f.value);
 }
 
 /**
@@ -114,8 +128,6 @@ export function extractMultiselectFromColumnFilters<T extends string = string>(
   columnId: string
 ): T[] | undefined {
   const f = filters.find((x) => x.id === columnId);
-  if (!f) return undefined;
-  const value = f.value as T[] | undefined;
-  if (!value || value.length === 0) return undefined;
-  return value;
+  if (!f || !isStringArray(f.value) || f.value.length === 0) return undefined;
+  return f.value as T[];
 }

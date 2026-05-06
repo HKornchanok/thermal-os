@@ -70,7 +70,10 @@ export const CHART_SERIES_COLORS = [
  *   index 0–4   → base chart-1..5
  *   index 5–9   → 70% base + 30% foreground (darker variant)
  *   index 10–14 → 70% base + 30% background (lighter variant)
- *   index 15+   → cycle from index 0 (rare in practice)
+ *   index 15–19 → 50% base + 50% foreground (deep variant)
+ *   index 20–24 → 50% base + 50% background (pale variant)
+ *   index 25+   → cycle from index 0 (extremely unlikely — would mean
+ *                 25+ distinct series on a single chart)
  *
  * `color-mix(in oklch, ...)` is supported in modern Chrome/Safari/
  * Firefox. The theme's variables are OKLCH so mixing stays in the same
@@ -78,7 +81,7 @@ export const CHART_SERIES_COLORS = [
  */
 export function colorForSeriesIndex(i: number): string {
   const base = CHART_SERIES_COLORS[i % CHART_SERIES_COLORS.length];
-  const variant = Math.floor(i / CHART_SERIES_COLORS.length) % 3;
+  const variant = Math.floor(i / CHART_SERIES_COLORS.length) % 5;
   switch (variant) {
     case 0:
       return base;
@@ -86,6 +89,10 @@ export function colorForSeriesIndex(i: number): string {
       return `color-mix(in oklch, ${base} 70%, var(--foreground) 30%)`;
     case 2:
       return `color-mix(in oklch, ${base} 70%, var(--background) 30%)`;
+    case 3:
+      return `color-mix(in oklch, ${base} 50%, var(--foreground) 50%)`;
+    case 4:
+      return `color-mix(in oklch, ${base} 50%, var(--background) 50%)`;
     default:
       return base;
   }
