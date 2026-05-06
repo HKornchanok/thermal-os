@@ -52,6 +52,14 @@ def compare(request):
 
     if a_from >= a_to or b_from >= b_to:
         return Response({"detail": "from must be earlier than to"}, status=400)
+    # The "before/after" naming carries chronological meaning — Period A
+    # has to start strictly before Period B starts. Without this guard a
+    # caller can swap the periods and the savings_pct sign flips silently.
+    if a_from >= b_from:
+        return Response(
+            {"detail": "Period A (before) must start before Period B (after)"},
+            status=400,
+        )
 
     with connection.cursor() as cursor:
         cursor.execute(sql.COMPARE_AVG, [a_from, a_to])

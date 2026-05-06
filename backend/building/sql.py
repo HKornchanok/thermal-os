@@ -128,6 +128,19 @@ DECISIONS_PAGE = """
 """
 
 
+# /api/chat/ — most recent N decisions across all time, with machine_name
+# joined in. Same join shape as DECISIONS_PAGE but no time/action filter
+# and a single LIMIT.
+DECISIONS_RECENT = """
+    SELECT a.id, a.decided_at, a.machine_id, m.name AS machine_name,
+           a.action_type, a.value, a.reason
+    FROM building_aidecision a
+    LEFT JOIN building_machine m ON m.id = a.machine_id
+    ORDER BY a.decided_at DESC
+    LIMIT %s
+"""
+
+
 # /api/energy/compare/ — average of hourly building totals for one period.
 # Avg-of-hourly-sums smooths over per-interval noise, giving a stable
 # comparison figure regardless of period length. The COALESCE keeps the
@@ -178,30 +191,66 @@ ALERT_TEMP_DRIFT = """
 
 
 # /api/alerts/ — Rule 3: non-critical machine ON for >16 consecutive hours.
-# `max_on` = latest ON timestamp; `last_off` = latest OFF timestamp.
-# If last_off < max_on (or no OFF exists), the machine has been ON
-# continuously since `last_off` (or since `max_on - 24h` if it's never
-# been OFF in seeded history). Critical machines (Server Room AC, Basement
-# Parking fan) are excluded — they're supposed to be on 24/7.
+# Streak start = first ON reading AFTER the most recent OFF (or MIN ON
+# reading if the machine has no OFF history yet). Old definition
+# fell back to `latest - 24h` when last_off was NULL, which incorrectly
+# fired for any never-OFF machine. Critical machines are excluded —
+# Server Room AC + Basement Parking fan run 24/7 by design.
+# /api/chat/ — per-zone kWh in a window. 5-min sample power × 5/60 = kWh,
+# same conversion as KWH_BETWEEN. Used to feed today + yesterday zone
+# breakdowns into the chat assistant's grounded prompt.
+ZONE_KWH_BETWEEN = """
+    SELECT m.zone,
+           COALESCE(SUM(sr.power_kw), 0) * 5.0 / 60.0 AS kwh
+    FROM building_sensorreading sr
+    JOIN building_machine m ON m.id = sr.machine_id
+    WHERE sr.recorded_at >= %s AND sr.recorded_at < %s
+    GROUP BY m.zone
+    ORDER BY kwh DESC
+"""
+
+
+# /api/chat/ — daily building kWh history, one row per Bangkok-day bucket.
+# `time_bucket` with the BANGKOK timezone offset puts each day's energy
+# in the correct local-day bucket. Replaces a 7-iteration loop calling
+# KWH_BETWEEN — same result, one round trip.
+DAILY_KWH_HISTORY = """
+    SELECT time_bucket('1 day'::interval, recorded_at, '+07:00') AS day,
+           COALESCE(SUM(power_kw), 0) * 5.0 / 60.0 AS kwh
+    FROM building_sensorreading
+    WHERE recorded_at >= %s AND recorded_at < %s
+    GROUP BY day
+    ORDER BY day
+"""
+
+
 ALERT_NONSTOP = """
     SELECT m.id AS machine_id, m.name,
-           EXTRACT(EPOCH FROM (
-               max_on.ts - COALESCE(last_off.ts, max_on.ts - INTERVAL '24 hours')
-           )) / 3600 AS hours_on
+           EXTRACT(EPOCH FROM (latest.ts - streak.streak_start)) / 3600 AS hours_on
     FROM building_machine m
-    JOIN (
-        SELECT DISTINCT ON (machine_id) machine_id, recorded_at AS ts
-        FROM building_sensorreading WHERE status = 'ON'
-        ORDER BY machine_id, recorded_at DESC
-    ) max_on ON max_on.machine_id = m.id
-    LEFT JOIN (
-        SELECT DISTINCT ON (machine_id) machine_id, recorded_at AS ts
-        FROM building_sensorreading WHERE status = 'OFF'
-        ORDER BY machine_id, recorded_at DESC
-    ) last_off ON last_off.machine_id = m.id
+    JOIN LATERAL (
+        SELECT recorded_at AS ts, status
+        FROM building_sensorreading
+        WHERE machine_id = m.id
+        ORDER BY recorded_at DESC
+        LIMIT 1
+    ) latest ON TRUE
+    LEFT JOIN LATERAL (
+        SELECT recorded_at AS ts
+        FROM building_sensorreading
+        WHERE machine_id = m.id AND status = 'OFF'
+        ORDER BY recorded_at DESC
+        LIMIT 1
+    ) last_off ON TRUE
+    JOIN LATERAL (
+        SELECT MIN(recorded_at) AS streak_start
+        FROM building_sensorreading
+        WHERE machine_id = m.id
+          AND status = 'ON'
+          AND recorded_at > COALESCE(last_off.ts, '-infinity'::timestamptz)
+    ) streak ON TRUE
     WHERE NOT m.is_critical
-      AND (last_off.ts IS NULL OR last_off.ts < max_on.ts)
-      AND EXTRACT(EPOCH FROM (
-          max_on.ts - COALESCE(last_off.ts, max_on.ts - INTERVAL '24 hours')
-      )) / 3600 > 16
+      AND latest.status = 'ON'
+      AND streak.streak_start IS NOT NULL
+      AND EXTRACT(EPOCH FROM (latest.ts - streak.streak_start)) / 3600 > 16
 """

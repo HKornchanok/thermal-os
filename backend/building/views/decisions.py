@@ -1,6 +1,5 @@
 """Paginated AI decision log endpoint."""
 
-from datetime import timedelta
 from math import ceil
 
 from django.db import connection
@@ -10,8 +9,8 @@ from rest_framework.response import Response
 from building import sql
 from building.utils import (
     ALLOWED_ACTIONS,
-    get_max_recorded_at,
     parse_iso_datetime,
+    resolve_window,
 )
 
 
@@ -84,20 +83,18 @@ def decisions_list(request):
         )
 
     # Smart defaults — last 7 days of activity anchored to MAX(recorded_at).
-    if to_dt is None:
-        to_dt = get_max_recorded_at()
-        if to_dt is None:
-            return Response(
-                {
-                    "count": 0,
-                    "page": page,
-                    "page_size": page_size,
-                    "total_pages": 0,
-                    "results": [],
-                }
-            )
-    if from_dt is None:
-        from_dt = to_dt - timedelta(days=7)
+    window = resolve_window(from_dt, to_dt, default_hours=24 * 7)
+    if window is None:
+        return Response(
+            {
+                "count": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0,
+                "results": [],
+            }
+        )
+    from_dt, to_dt = window
 
     offset = (page - 1) * page_size
 

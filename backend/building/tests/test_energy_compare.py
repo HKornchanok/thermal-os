@@ -104,10 +104,9 @@ def test_compare_savings_pct_arithmetic(admin_client):
 # ---------- Equal periods -> ~0% savings ------------------------------------
 
 
-def test_compare_same_period_yields_zero_savings(admin_client):
-    """Comparing a period to itself should always yield 0% savings.
-    Uses Period A from the default split — guaranteed to fall within the
-    seed window regardless of when the test session started."""
+def test_compare_identical_periods_returns_400(admin_client):
+    """Period A must precede Period B chronologically. Identical periods
+    silently flip the savings_pct sign convention, so we reject them."""
     default_body = admin_client.get("/api/energy/compare/").json()
     # Convert +00:00 to Z so URL decoding doesn't turn the + into a space.
     a_from = _z(datetime.fromisoformat(default_body["before"]["from"]))
@@ -116,10 +115,7 @@ def test_compare_same_period_yields_zero_savings(admin_client):
         f"/api/energy/compare/?a_from={a_from}&a_to={a_to}"
         f"&b_from={a_from}&b_to={a_to}"
     )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["before"]["avg_kw"] == body["after"]["avg_kw"]
-    assert body["savings_pct"] == 0.0
+    assert response.status_code == 400
 
 
 # ---------- Partial overrides keep smart defaults for unspecified params ----

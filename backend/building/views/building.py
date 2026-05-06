@@ -14,6 +14,8 @@ from building.utils import (
     dictfetchall,
     get_max_recorded_at,
     parse_iso_datetime,
+    resolve_window,
+    yesterday_kwh_or_none,
 )
 
 
@@ -71,6 +73,7 @@ def summary(request):
         yesterday_kwh_raw = cursor.fetchone()[0]
 
     active = sum(1 for r in latest if r["status"] == "ON")
+    inactive = sum(1 for r in latest if r["status"] == "OFF")
     total_power = sum(r["power_kw"] for r in latest if r["status"] == "ON")
 
     # Avg temp: only ON ACs with non-null temperature. Fans excluded entirely.
@@ -84,18 +87,17 @@ def summary(request):
     avg_temp = (sum(ac_temps) / len(ac_temps)) if ac_temps else None
 
     # Yesterday-relative trend; None when there's no yesterday data.
-    if yesterday_kwh_raw and yesterday_kwh_raw > 0:
-        yesterday_kwh = yesterday_kwh_raw
+    yesterday_kwh = yesterday_kwh_or_none(yesterday_kwh_raw)
+    if yesterday_kwh is not None:
         trend_pct = (today_kwh - yesterday_kwh) / yesterday_kwh * 100.0
     else:
-        yesterday_kwh = None
         trend_pct = None
 
     return Response(
         {
             "total_machines": total_machines,
             "active_machines": active,
-            "inactive_machines": total_machines - active,
+            "inactive_machines": inactive,
             "total_power_kw": round(total_power, 2),
             "today_kwh": round(today_kwh, 2),
             "yesterday_kwh": round(yesterday_kwh, 2) if yesterday_kwh is not None else None,
@@ -135,13 +137,10 @@ def energy(request):
     except ValueError as e:
         return Response({"detail": f"Invalid datetime: {e}"}, status=400)
 
-    # Smart defaults — last 24 hours of available data.
-    if to_dt is None:
-        to_dt = get_max_recorded_at()
-        if to_dt is None:
-            return Response([])
-    if from_dt is None:
-        from_dt = to_dt - timedelta(hours=24)
+    window = resolve_window(from_dt, to_dt)
+    if window is None:
+        return Response([])
+    from_dt, to_dt = window
 
     sql_query = sql.TOTAL_ENERGY_TPL.format(bucket_interval=bucket_interval)
     with connection.cursor() as cursor:
@@ -186,12 +185,10 @@ def energy_by_zone(request):
     except ValueError as e:
         return Response({"detail": f"Invalid datetime: {e}"}, status=400)
 
-    if to_dt is None:
-        to_dt = get_max_recorded_at()
-        if to_dt is None:
-            return Response([])
-    if from_dt is None:
-        from_dt = to_dt - timedelta(hours=24)
+    window = resolve_window(from_dt, to_dt)
+    if window is None:
+        return Response([])
+    from_dt, to_dt = window
 
     sql_query = sql.ZONE_ENERGY_TPL.format(bucket_interval=bucket_interval)
     with connection.cursor() as cursor:

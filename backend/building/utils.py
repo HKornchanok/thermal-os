@@ -43,12 +43,23 @@ def dictfetchall(cursor) -> list[dict]:
 def parse_iso_datetime(s: Optional[str]) -> Optional[datetime]:
     """Parse an ISO 8601 datetime string. Returns None for None/empty.
 
-    Raises ValueError on malformed input — caller should turn that into
-    a 400 response.
+    A naive datetime (no offset) is rejected — every timestamp the API
+    accepts must commit to a timezone. Without this guard a caller could
+    send "2026-05-01T00:00:00" and Django would compare it against UTC
+    timestamps as if it were already UTC, silently shifting the window
+    by 7 hours in Bangkok.
+
+    Raises ValueError on malformed input or naive datetimes — caller
+    should turn that into a 400 response.
     """
     if not s:
         return None
-    return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+        raise ValueError(
+            "datetime must include a timezone offset (e.g. trailing 'Z' or '+07:00')"
+        )
+    return dt
 
 
 def get_max_recorded_at(machine_id: Optional[int] = None) -> Optional[datetime]:
@@ -96,3 +107,36 @@ def day_start(dt: datetime) -> datetime:
 def day_end(dt: datetime) -> datetime:
     """Bangkok midnight of the day AFTER the given datetime — exclusive end."""
     return day_start(dt) + timedelta(days=1)
+
+
+def resolve_window(
+    from_dt: Optional[datetime],
+    to_dt: Optional[datetime],
+    *,
+    default_hours: int = 24,
+    machine_id: Optional[int] = None,
+) -> Optional[tuple[datetime, datetime]]:
+    """Fill missing from/to with the standard "trailing window" defaults.
+
+    Returns None when neither side is provided AND there are no readings
+    yet — the caller should respond with an empty payload. Otherwise
+    returns the resolved (from, to) pair.
+
+    `to` defaults to MAX(recorded_at) (optionally scoped to a machine);
+    `from` defaults to `to - default_hours`. This matches what every
+    aggregate endpoint already did inline.
+    """
+    if to_dt is None:
+        to_dt = get_max_recorded_at(machine_id=machine_id)
+        if to_dt is None:
+            return None
+    if from_dt is None:
+        from_dt = to_dt - timedelta(hours=default_hours)
+    return from_dt, to_dt
+
+
+def yesterday_kwh_or_none(raw: Optional[float]) -> Optional[float]:
+    """Treat NULL/zero `yesterday_kwh` as "no data" to avoid divide-by-zero
+    in trend calculations and "vs yesterday" comparisons. Used by
+    /api/building/summary/ and the chat context builder."""
+    return raw if raw and raw > 0 else None

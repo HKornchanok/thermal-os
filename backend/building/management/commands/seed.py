@@ -316,7 +316,9 @@ def _setpoint_for(m: MachineCtx, dt: datetime, period: str) -> float | None:
     return 24.0
 
 
-def _power_load_factor(m: MachineCtx, dt: datetime, period: str) -> float:
+def _power_load_factor(
+    m: MachineCtx, dt: datetime, period: str, rng: random.Random
+) -> float:
     """Fraction of rated power when ON, in [0.30, 0.80] for ACs / [0.40, 0.70] for fans.
 
     Driven by outdoor heat: the hotter it is outside, the harder the AC works
@@ -331,7 +333,7 @@ def _power_load_factor(m: MachineCtx, dt: datetime, period: str) -> float:
         # Fans 40–70% — narrower band, less weather-driven (they move air
         # regardless), small noise.
         base = 0.45 + 0.20 * outdoor_norm
-        load = base + random.gauss(0, 0.03)
+        load = base + rng.gauss(0, 0.03)
         return max(0.40, min(0.70, load))
 
     # AC: 30–80%. Manual sits ~78% of rated on a hot afternoon; AI sits ~65%.
@@ -339,19 +341,21 @@ def _power_load_factor(m: MachineCtx, dt: datetime, period: str) -> float:
         base = 0.55 + 0.22 * outdoor_norm
     else:
         base = 0.40 + 0.25 * outdoor_norm
-    load = base + random.gauss(0, 0.04)
+    load = base + rng.gauss(0, 0.04)
     return max(0.30, min(0.80, load))
 
 
-def _temp_drift(period: str, dt: datetime) -> float:
+def _temp_drift(period: str, dt: datetime, rng: random.Random) -> float:
     """Indoor drift from setpoint, in °C. Manual is sloppier; AI tighter."""
     outdoor_norm = (_outdoor_temp(dt) - OUTDOOR_LOW_C) / (OUTDOOR_HIGH_C - OUTDOOR_LOW_C)
     if period == "manual":
-        return random.gauss(0.6, 0.7) + outdoor_norm * 0.6
-    return random.gauss(0.1, 0.3) + outdoor_norm * 0.3
+        return rng.gauss(0.6, 0.7) + outdoor_norm * 0.6
+    return rng.gauss(0.1, 0.3) + outdoor_norm * 0.3
 
 
-def _gen_reading(m: MachineCtx, dt: datetime, period: str) -> SensorReading:
+def _gen_reading(
+    m: MachineCtx, dt: datetime, period: str, rng: random.Random
+) -> SensorReading:
     on = _is_on(m, dt, period)
     setpoint = _setpoint_for(m, dt, period)
 
@@ -368,28 +372,28 @@ def _gen_reading(m: MachineCtx, dt: datetime, period: str) -> SensorReading:
             )
         # AC OFF: indoor drifts toward outdoor when not actively cooled.
         outdoor = _outdoor_temp(dt)
-        drifted = (setpoint or 25.0) + (outdoor - 25.0) * 0.3 + random.gauss(0, 0.5)
+        drifted = (setpoint or 25.0) + (outdoor - 25.0) * 0.3 + rng.gauss(0, 0.5)
         return SensorReading(
             machine_id=m.id, recorded_at=dt, power_kw=0.0,
             temperature=round(drifted, 2), setpoint=setpoint,
             speed_pct=None, status=SensorReading.OFF,
         )
 
-    load = _power_load_factor(m, dt, period)
+    load = _power_load_factor(m, dt, period, rng)
     power_kw = round(m.rated_power_kw * load, 3)
 
     if m.machine_type == Machine.FAN:
         # Fan speed roughly tracks load factor (40–80% per brief Data Guide,
         # which lines up with the 40–70% power band plus a small upward bias
         # for VFD overhead at low load).
-        speed_pct = round(min(80.0, max(40.0, load * 100.0 + random.gauss(0, 3))), 1)
+        speed_pct = round(min(80.0, max(40.0, load * 100.0 + rng.gauss(0, 3))), 1)
         return SensorReading(
             machine_id=m.id, recorded_at=dt, power_kw=power_kw,
             temperature=None, setpoint=None, speed_pct=speed_pct,
             status=SensorReading.ON,
         )
 
-    indoor = (setpoint or 25.0) + _temp_drift(period, dt)
+    indoor = (setpoint or 25.0) + _temp_drift(period, dt, rng)
     # Clamp to the brief's 22–27°C indoor range; gauss noise can push outside.
     indoor = max(22.0, min(27.0, indoor))
     return SensorReading(
@@ -512,6 +516,7 @@ def _apply_engineered_alerts(
     rows: list[SensorReading],
     machines: list[MachineCtx],
     end: datetime,
+    rng: random.Random,
 ) -> None:
     """Mutate the trailing window of the seed so each alert rule fires.
 
@@ -559,13 +564,13 @@ def _apply_engineered_alerts(
                 r.power_kw = ENGINEERED_AC_L1_POWER_KW
             else:
                 r.power_kw = round(
-                    ENGINEERED_AC_L1_POWER_KW + random.gauss(0, 0.3), 2
+                    ENGINEERED_AC_L1_POWER_KW + rng.gauss(0, 0.3), 2
                 )
             r.status = SensorReading.ON
             # Over-cool: the stuck-on AC keeps cooling past the night
             # setpoint. Indoor reads ~23°C against a 27°C target.
             if r.temperature is not None:
-                r.temperature = round(23.0 + random.gauss(0, 0.3), 2)
+                r.temperature = round(23.0 + rng.gauss(0, 0.3), 2)
 
         # 2. AC-S2 temp drift at the very last slot.
         if r.machine_id == ac_s2_id and r.recorded_at == last_dt:
@@ -588,7 +593,7 @@ def _apply_engineered_alerts(
             r.power_kw = round(45.0 * 0.55, 3)
             # Hold a comfortable temp so this doesn't also trip temp_drift.
             r.setpoint = 25.0
-            r.temperature = round(25.0 + random.gauss(0.3, 0.4), 2)
+            r.temperature = round(25.0 + rng.gauss(0.3, 0.4), 2)
 
 
 # ---------------------------------------------------------------------------
@@ -611,7 +616,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         days: int = options["days"]
         do_clear: bool = options["clear"]
-        random.seed(options["seed"])
+        # Local RNG threaded through reading generation so re-runs are
+        # reproducible per `--seed N` without depending on global state.
+        readings_rng = random.Random(options["seed"])
 
         if do_clear:
             self.stdout.write("Clearing existing telemetry…")
@@ -664,11 +671,12 @@ class Command(BaseCommand):
             f"({len(_DAY_PLANS)} day plans)"
         )
 
-        readings = self._gen_readings(list(machines.values()), start, manual_end, end)
+        readings = self._gen_readings(
+            list(machines.values()), start, manual_end, end, readings_rng
+        )
         self._bulk_insert(SensorReading, readings, batch_size=5000)
 
         decisions = self._gen_decisions(machines, manual_end, end)
-        SensorReading.objects.bulk_create([])  # ensure prior writes flush
         AIDecision.objects.bulk_create(decisions, batch_size=500)
 
         self.stdout.write(self.style.SUCCESS(
@@ -712,24 +720,20 @@ class Command(BaseCommand):
         start: datetime,
         manual_end: datetime,
         end: datetime,
+        rng: random.Random,
     ) -> Iterable[SensorReading]:
-        """Yield 5-minute readings across [start, end), period-aware.
-
-        Wraps the natural generation in `_apply_engineered_alerts` so the
-        last few hours of the seed are nudged to deterministically fire
-        each of the three Smart Alerts rules — without that, the dashboard
-        boots into the demo with an empty alert banner and there's nothing
-        for Somchai to look at on the most prominent feature in the bonus.
-        """
+        """5-minute readings across [start, end), period-aware. Wraps in
+        `_apply_engineered_alerts` so the trailing window deterministically
+        fires each Smart Alerts rule on first load."""
         step = timedelta(minutes=5)
         dt = start
         rows: list[SensorReading] = []
         while dt < end:
             period = "manual" if dt < manual_end else "ai"
             for m in machines:
-                rows.append(_gen_reading(m, dt, period))
+                rows.append(_gen_reading(m, dt, period, rng))
             dt += step
-        _apply_engineered_alerts(rows, machines, end)
+        _apply_engineered_alerts(rows, machines, end, rng)
         return rows
 
     def _gen_decisions(

@@ -1,7 +1,5 @@
 """Machine registry + per-machine sensor time-series."""
 
-from datetime import timedelta
-
 from django.db import connection
 from django.http import Http404
 from rest_framework.decorators import api_view
@@ -12,8 +10,8 @@ from building.utils import (
     ALLOWED_BUCKETS_FULL,
     ALLOWED_METRICS,
     dictfetchall,
-    get_max_recorded_at,
     parse_iso_datetime,
+    resolve_window,
 )
 
 
@@ -96,12 +94,10 @@ def machine_sensors(request, machine_id: int):
     # show ("what happened in the last day") and matches the Energy page's
     # default behaviour. A calendar-day window would clip to half a day on
     # an operator opening the page right after midnight.
-    if to_dt is None:
-        to_dt = get_max_recorded_at(machine_id=machine_id)
-        if to_dt is None:
-            return Response([])
-    if from_dt is None:
-        from_dt = to_dt - timedelta(hours=24)
+    window = resolve_window(from_dt, to_dt, machine_id=machine_id)
+    if window is None:
+        return Response([])
+    from_dt, to_dt = window
 
     sql_query = sql.SENSOR_TIMESERIES_TPL.format(
         metric=metric,

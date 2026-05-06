@@ -5,11 +5,12 @@ graceful: if `ANTHROPIC_API_KEY` is unset, it returns 200 with a
 "not configured" reply rather than 500, so the chat page works in
 local/CI environments without the bonus dependency.
 
-Context construction reads three slices that the rest of the API
-already exposes — latest reading per machine, today/yesterday kWh,
-last 20 AI decisions — and packages them as a system prompt the
-model can reason against. Reusing the SQL keeps facts consistent
-across `/api/chat/` and the dashboard cards/tables.
+Context construction reads slices that the rest of the API already
+exposes — latest reading per machine, today/yesterday/7-day kWh,
+hourly building power, per-zone daily kWh, last 40 AI decisions —
+and packages them as a system prompt the model can reason against.
+Reusing the SQL keeps facts consistent across `/api/chat/` and the
+dashboard cards/tables.
 """
 
 from __future__ import annotations
@@ -19,12 +20,18 @@ from typing import Any
 
 from django.conf import settings
 from django.db import connection
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 
 from building import sql
-from building.utils import day_start, dictfetchall, get_max_recorded_at
+from building.utils import (
+    day_start,
+    dictfetchall,
+    get_max_recorded_at,
+    yesterday_kwh_or_none,
+)
 
 
 # Context budget. We pull more decisions + multi-day energy data than the
@@ -39,9 +46,26 @@ DAILY_HISTORY_DAYS = 7
 MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 1024
 
+# Keep prompts bounded — Anthropic charges per input token, and a
+# multi-megabyte message is almost certainly an abuse or a paste of
+# the wrong thing. 4 KB covers any realistic operator question with
+# headroom; longer pastes get a 400 instead of silently burning credit.
+MAX_MESSAGE_LEN = 4000
+
+
+class ChatRateThrottle(UserRateThrottle):
+    """Bound per-user chat usage. Anthropic calls cost real money and the
+    snapshot prompt is multi-KB even with caching — a logged-in client
+    looping the endpoint can rack up spend fast. Default to 30 req/min
+    per user; can be overridden via DRF_THROTTLE_RATES later if needed."""
+
+    scope = "chat"
+    rate = "30/min"
+
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([ChatRateThrottle])
 def chat(request):
     """Single-turn grounded chat.
 
@@ -53,16 +77,22 @@ def chat(request):
 
     Behaviour matrix:
         - empty/missing message → 400
+        - message longer than MAX_MESSAGE_LEN → 400
         - ANTHROPIC_API_KEY unset → 200 with graceful fallback string
           (lets the FE render the page in environments without the
           bonus dep installed)
-        - upstream Anthropic error → 502 with a short error string
+        - upstream Anthropic transport/auth/rate-limit error → 502
         - happy path → 200 with the assistant's first text block
     """
     message = (request.data or {}).get("message", "")
     if not isinstance(message, str) or not message.strip():
         return Response(
             {"detail": "`message` is required and must be a non-empty string."},
+            status=400,
+        )
+    if len(message) > MAX_MESSAGE_LEN:
+        return Response(
+            {"detail": f"`message` must be at most {MAX_MESSAGE_LEN} characters."},
             status=400,
         )
 
@@ -108,9 +138,21 @@ def chat(request):
             ],
             messages=[{"role": "user", "content": message.strip()}],
         )
-    except Exception as exc:  # noqa: BLE001
+    except anthropic.APIStatusError as exc:
+        # Upstream returned a non-2xx — surface the status class so the
+        # FE can show a useful message (rate limit vs auth vs server).
         return Response(
-            {"detail": f"Upstream AI error: {exc.__class__.__name__}"},
+            {"detail": f"Upstream AI error ({exc.status_code})."},
+            status=502,
+        )
+    except anthropic.APIConnectionError:
+        return Response(
+            {"detail": "Could not reach AI service."},
+            status=502,
+        )
+    except anthropic.AnthropicError as exc:
+        return Response(
+            {"detail": f"AI client error: {exc.__class__.__name__}"},
             status=502,
         )
 
@@ -272,17 +314,17 @@ def _gather_context() -> dict[str, Any]:
             cursor.execute(sql.KWH_BETWEEN, [today_start, today_end])
             ctx["today_kwh"] = cursor.fetchone()[0] or 0.0
             cursor.execute(sql.KWH_BETWEEN, [yesterday_start, today_start])
-            yraw = cursor.fetchone()[0]
-            ctx["yesterday_kwh"] = yraw if yraw and yraw > 0 else None
+            ctx["yesterday_kwh"] = yesterday_kwh_or_none(cursor.fetchone()[0])
 
-            # Last 7 days daily kWh. Loop is fine — N=7 is small.
-            history: list[tuple[Any, float]] = []
-            for offset in range(DAILY_HISTORY_DAYS, 0, -1):
-                day_s = today_start - timedelta(days=offset - 1)
-                day_e = day_s + timedelta(days=1)
-                cursor.execute(sql.KWH_BETWEEN, [day_s, day_e])
-                history.append((day_s.date(), cursor.fetchone()[0] or 0.0))
-            ctx["daily_kwh_history"] = history
+            # Last 7 days daily kWh — single time_bucket query instead of
+            # one round trip per day. Truncates to days that fall inside
+            # the [history_start, today_end) window.
+            history_start = today_start - timedelta(days=DAILY_HISTORY_DAYS - 1)
+            cursor.execute(sql.DAILY_KWH_HISTORY, [history_start, today_end])
+            ctx["daily_kwh_history"] = [
+                (bucket.date(), float(kwh or 0.0))
+                for bucket, kwh in cursor.fetchall()
+            ]
 
             # Hourly building power for today + yesterday — bucketed
             # via TOTAL_ENERGY_TPL with a 1-hour interval. Value is the
@@ -298,36 +340,17 @@ def _gather_context() -> dict[str, Any]:
                 (b, round(p or 0.0, 1)) for b, p in cursor.fetchall()
             ]
 
-            # Per-zone daily kWh — one row per zone per day. Multiplying
-            # the 5-min sample power_kw by 5/60 converts to kWh, same
-            # logic as KWH_BETWEEN.
-            zone_sql = """
-                SELECT m.zone,
-                       COALESCE(SUM(sr.power_kw), 0) * 5.0 / 60.0 AS kwh
-                FROM building_sensorreading sr
-                JOIN building_machine m ON m.id = sr.machine_id
-                WHERE sr.recorded_at >= %s AND sr.recorded_at < %s
-                GROUP BY m.zone
-                ORDER BY kwh DESC
-            """
-            cursor.execute(zone_sql, [today_start, today_end])
+            # Per-zone daily kWh — one row per zone per day. Reuses the
+            # ZONE_KWH_BETWEEN constant in sql.py for parity with the
+            # rest of the codebase.
+            cursor.execute(sql.ZONE_KWH_BETWEEN, [today_start, today_end])
             ctx["zone_today"] = {row[0]: round(row[1], 1) for row in cursor.fetchall()}
-            cursor.execute(zone_sql, [yesterday_start, today_start])
+            cursor.execute(sql.ZONE_KWH_BETWEEN, [yesterday_start, today_start])
             ctx["zone_yesterday"] = {
                 row[0]: round(row[1], 1) for row in cursor.fetchall()
             }
 
-        cursor.execute(
-            """
-            SELECT a.id, a.decided_at, a.machine_id, m.name AS machine_name,
-                   a.action_type, a.value, a.reason
-            FROM building_aidecision a
-            LEFT JOIN building_machine m ON m.id = a.machine_id
-            ORDER BY a.decided_at DESC
-            LIMIT %s
-            """,
-            [DECISIONS_FOR_CONTEXT],
-        )
+        cursor.execute(sql.DECISIONS_RECENT, [DECISIONS_FOR_CONTEXT])
         ctx["decisions"] = dictfetchall(cursor)
 
     return ctx
