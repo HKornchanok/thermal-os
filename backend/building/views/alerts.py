@@ -8,37 +8,22 @@ from building import sql
 from building.utils import dictfetchall
 
 
-# Severity sort key — critical comes before warning so the banner stack
-# always shows the worst issue at the top.
 _SEVERITY_ORDER = {"critical": 0, "warning": 1}
-
-# Rule 1: power spike fires above this fraction of rated_power_kw.
 _POWER_THRESHOLD_FRACTION = 0.90
-
-# Rule 2: temperature drift fires above this many °C from setpoint.
 _TEMP_DRIFT_THRESHOLD = 2.0
-
-# Rule 3: nonstop runtime fires above this many consecutive ON hours
-# for non-critical machines.
 _NONSTOP_THRESHOLD_HOURS = 16
 
 
 @api_view(["GET"])
 def alerts_list(request):
-    """Active anomaly alerts.
-
-    Computed on the fly from the latest readings + recent history — no
-    persistent alert table. The dashboard polls this every 30s so the list
-    always reflects current state.
+    """Active anomaly alerts, computed on the fly (no persistent table).
 
     Three rules (DESIGN.md §1B):
-        1. power_spike      WARNING  power_kw > 0.90 × rated, latest = ON
-        2. temp_drift       WARNING  |temp − setpoint| > 2.0°C, latest AC ON
-        3. nonstop_runtime  CRITICAL non-critical machine ON >16h straight
+      1. power_spike     WARNING  power_kw > 0.90 × rated, latest = ON
+      2. temp_drift      WARNING  |temp − setpoint| > 2°C, latest AC ON
+      3. nonstop_runtime CRITICAL non-critical machine ON >16h straight
 
-    Each rule's matching rows are converted to a uniform alert object and
-    merged. The list is sorted critical first, then alphabetical by
-    machine_name for stable rendering.
+    Sorted critical first, then alphabetical by machine_name.
     """
     alerts: list[dict] = []
 
@@ -99,6 +84,5 @@ def alerts_list(request):
 
 
 def _format_rated(rated: float) -> str:
-    """Trim trailing .0 on whole-number ratings so messages read naturally
-    ("45 kW rated" rather than "45.0 kW rated")."""
+    """Trim trailing .0 — "45 kW rated" reads better than "45.0 kW rated"."""
     return str(int(rated)) if rated == int(rated) else f"{rated:.1f}"
