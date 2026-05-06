@@ -216,3 +216,146 @@ alto-tech/
 - Pre-commit hook runs Prettier on staged frontend files. Backend Python
   is formatted by ruff (run manually).
 - Backend tests live in `backend/building/tests/` — `pytest -q` runs them.
+
+## What I'd improve with more time
+
+Honest take on what's missing or could be sharper, grouped by where it
+would most affect the system. Most of these aren't blockers for the
+current data volume / single-tenant use case but would matter as the
+system grows.
+
+### Performance & data layer
+
+- **TimescaleDB continuous aggregates** for the hourly building total
+  and per-zone daily kWh queries the chat assistant pumps into its
+  system prompt. At 24k rows the raw `time_bucket` queries are
+  ~10–30 ms; at millions they'd want pre-materialised aggregates
+  refreshing on a schedule. Already noted in DESIGN.md.
+- **Cursor pagination on `/api/decisions/`.** Current `LIMIT/OFFSET`
+  works for the 40-row demo but gets expensive past the first ~10k
+  decisions because Postgres still walks the offset rows.
+- **Redis cache** in front of `/api/machines/` and `/api/building/summary/`
+  with a short TTL. Both are polled every 30s by every connected
+  client; for a multi-user deployment one shared cache flatten the
+  query load.
+- **Server-side rate limiting on `/api/chat/`.** Each call costs
+  Anthropic credits — a malicious or misconfigured client could
+  drain a budget fast. DRF throttling on the chat endpoint is the
+  right scope (low rate, per-user quota).
+
+### Reliability & ops
+
+- **Real CI pipeline** — GitHub Actions running `pytest`,
+  `npm run typecheck`, and `npm run build` on every PR. Currently
+  these gates exist but are run manually; CI would catch
+  regressions before merge.
+- **Production server** instead of `runserver`. Gunicorn (WSGI) or
+  Uvicorn (ASGI) behind nginx. The Dockerfile still uses Django's
+  development server because the assessment is local-only.
+- **Structured logging with correlation IDs.** Every request gets
+  a UUID; logs from the FE, BE, and DB tag each line with it so
+  debugging "why was this user's chart blank?" becomes one grep
+  instead of a forensic exercise.
+- **Health check endpoint** (`/api/health/`) for orchestration
+  readiness probes — distinct from `/api/auth/token/` which is the
+  current de-facto liveness check.
+- **Sentry / similar APM** for error tracking. Errors currently
+  land in container logs only.
+
+### Frontend
+
+- **Real e2e tests** built on Playwright. We used Playwright for
+  ad-hoc audits during development; turning the manual test plan in
+  this README into a Playwright suite that runs in CI would catch
+  regressions in critical flows (login → Overview → drill into a
+  machine → see the chart populate).
+- **Storybook** for the shared dashboard components (`KpiCard`,
+  `MachineCard`, `AlertBanner`, `AreaChart` permutations).
+  Visual-regression coverage matters for a chart-heavy dashboard
+  where styling drift is invisible until someone notices.
+- **Skeleton loading states** instead of spinner-only `LoadingState`.
+  Mainly an issue on the Overview where six KPIs and twelve cards
+  pop in together — skeletons would make the perceived load smoother.
+- **Accessibility pass** with axe-core in CI. We did manual focus-ring
+  + keyboard nav fixes during the audit (PR #24) but didn't audit
+  for screen-reader semantics on every component (e.g. chart data
+  is fundamentally inaccessible to screen readers right now).
+- **Bundle analysis + per-route code splitting.** The /decisions
+  page pulls in TanStack Table; the /chat page pulls in
+  react-markdown. Both should be lazy-loaded so the Overview's
+  first paint isn't paying for code it doesn't use.
+
+### AI & chat
+
+- **Tool-calling instead of front-loaded context.** The chat system
+  prompt currently pumps ~8.5 KB of structured snapshots in front
+  of every question. A more elegant pattern: expose the existing API
+  endpoints as Anthropic tools and let Sonnet pull only what it
+  needs ("get_zone_kwh(date='2026-05-04')" instead of dumping all
+  zone data up front). Lower per-question token cost and richer
+  follow-ups.
+- **Multi-turn conversations.** Right now every question is
+  single-turn — the assistant has no memory of "what did you mean
+  earlier?" Threading conversation state through `/api/chat/`
+  (server-side or client-managed history array) would unlock
+  follow-up questions.
+- **Streaming replies.** Sonnet's `messages.stream()` API gives the
+  user words-per-second feedback rather than a thinking spinner →
+  full reply pop. Same network cost, much better perceived latency.
+
+### Features
+
+- **Cost view.** Energy is shown in kWh; operators ultimately care
+  about money. A configurable `$/kWh` tariff converts every total
+  into baht/USD on the same screen.
+- **Energy budgets per zone.** "Floor 1 should not exceed 80 kWh/day"
+  → an alert when it's tracking to overrun. Different mental model
+  from the threshold alerts (90% of rated etc.) — those are
+  fault-detection, budgets are operational targets.
+- **Daily / weekly / monthly summary** cards on the Overview.
+  Currently the dashboard only frames "today vs yesterday"; a
+  rolling 7-day or month-to-date number tells a different story.
+- **Option B from the brief — one-click PDF report.** We did Options
+  A and C; B (monthly PDF for management) was deferred. ReportLab
+  or WeasyPrint server-side, scheduled or on-demand.
+
+### Data realism
+
+- **Real outdoor weather API** instead of the sinusoidal model.
+  OpenWeatherMap or local meteorological feed — the seed currently
+  fakes a daily 24°C → 34°C cycle. Real weather drives real load,
+  which would make the AI control narrative more meaningful.
+- **Replace canned AI decisions with an actual optimisation pass.**
+  The seed's `_gen_day_decisions` produces a hand-curated 10
+  events/day. A small linear programming model (or even a
+  heuristic) reading the sensor stream and producing decisions
+  would let the dashboard demo a closed loop, not a replay.
+
+### Security
+
+- **API rate limiting** via DRF throttling — anonymous-burst,
+  per-user, and per-endpoint scopes (`/api/chat/` deserves
+  stricter limits than `/api/machines/`).
+- **CSP headers** on the frontend response (Next.js middleware).
+  Currently absent — script-src is wide open in dev.
+- **Audit log** for sign-ins, machine config changes, and AI
+  decision overrides. The `building_aidecision` table already
+  models "who/what/when/why" for the AI; an analogous table for
+  human actions would close the loop.
+- **2FA for admin accounts.** SimpleJWT supports custom claims,
+  TOTP integration is straightforward; assessment scope is
+  `admin/admin` so this is firmly out of scope right now.
+
+### Code quality
+
+- **OpenAPI schema → frontend types.** `frontend/src/lib/api.ts`
+  hand-mirrors backend response shapes. drf-spectacular on the
+  backend + openapi-typescript on the frontend would generate
+  these types from a single source.
+- **Backend pre-commit hook.** Frontend gets Prettier on every
+  commit via husky; backend ruff is run manually. Adding ruff
+  to the pre-commit pipeline would keep both sides consistent.
+- **Coverage reports.** 125 tests pass but coverage isn't measured.
+  `pytest --cov` + a CI report would surface untested paths
+  (e.g. the chat error-handling branches that surfaced during
+  PR #36 weren't covered until that PR added them).
