@@ -35,17 +35,13 @@ const VIEW_OPTIONS = [
 type View = (typeof VIEW_OPTIONS)[number]["value"];
 
 export default function EnergyPage() {
-  // `day` is the user's explicit selection. Empty means "show the
-  // backend's default range" (last 24h anchored to MAX(recorded_at)).
-  // Initialising empty also avoids the SSR / hydration mismatch a
-  // `Date.now()`-derived initial state would cause.
+  // Empty `day` means "let the server pick the default range" — also
+  // avoids a hydration mismatch from a Date.now()-derived initial state.
   const [day, setDay] = useState<string>("");
   const [bucket, setBucket] = useState<"15min" | "1h">("1h");
   const [view, setView] = useState<View>("total");
-  // Zones the user has explicitly hidden via the legend checkboxes.
-  // Empty = show all (the natural first-load state). Storing the
-  // exclusion set rather than the inclusion set means the default UX
-  // doesn't depend on the zones being known when state initialises.
+  // Storing the exclusion set (vs inclusion) means the default "show all"
+  // doesn't need the zone names to be known at state-init time.
   const [hiddenZones, setHiddenZones] = useState<Set<string>>(new Set());
 
   const params = useMemo(
@@ -54,9 +50,7 @@ export default function EnergyPage() {
     [day, bucket]
   );
 
-  // Fire both queries unconditionally so toggling Total ↔ By Zone is
-  // instant from cache. Each has refetchInterval: 30s; the unused
-  // background refetches are cheap relative to render flicker.
+  // Fire both unconditionally so toggling Total ↔ By Zone is instant.
   const totalQuery = useBuildingEnergy(params);
   const zoneQuery = useBuildingEnergyByZone(params);
 
@@ -66,20 +60,14 @@ export default function EnergyPage() {
   const totalPoints = totalQuery.data ?? [];
   const zonePoints = zoneQuery.data ?? [];
 
-  // Zone keys come from the first row of the by-zone response — the
-  // backend pivots with a stable shape (every row carries every zone),
-  // so reading sample[0] is enough.
+  // Backend pivots with a stable shape (every row carries every zone).
   const zoneKeys = useMemo(() => {
     if (zonePoints.length === 0) return [] as string[];
     return Object.keys(zonePoints[0]).filter((k) => k !== "bucket");
   }, [zonePoints]);
 
-  // All zones, with their position-based colour pinned. Pinning the
-  // colour by ORIGINAL index (not by visible-position) keeps each zone's
-  // stripe the same hue when other zones are toggled off — otherwise the
-  // legend swatch and the chart stripe would drift apart visually.
-  // colorForSeriesIndex expands the base 5-colour palette via color-mix
-  // variants so 12 zones don't share hues.
+  // Pin each zone's colour by ORIGINAL index so the hue stays stable
+  // when other zones are toggled off (legend ↔ chart wouldn't drift).
   const allZoneSeries: AreaSeries[] = useMemo(
     () =>
       zoneKeys.map((zone, i) => ({
@@ -104,10 +92,8 @@ export default function EnergyPage() {
     });
   };
 
-  // Stats are computed from whichever view is active so the cards
-  // always describe what's drawn. By-zone sums to total per bucket,
-  // so numbers stay identical when toggling — the cross-check tested
-  // back in PR #5 ("per-zone sum equals /api/building/energy/ totals").
+  // Stats follow the active view; by-zone sums to total per bucket so
+  // numbers stay identical when toggling.
   const statValues = useMemo(() => {
     if (view === "total") return totalPoints.map((p) => p.total_kw);
     return zonePoints.map((p) =>
@@ -123,8 +109,7 @@ export default function EnergyPage() {
     : 0;
   const count = statValues.length;
 
-  // Latest day for which the backend has data. Captured ONCE from the
-  // initial Total response (when `day` is empty) and pinned thereafter.
+  // Captured once from the initial Total response and pinned thereafter.
   const [latestDataDay, setLatestDataDay] = useState<string>("");
   useEffect(() => {
     if (!day && !latestDataDay && totalPoints.length > 0) {
@@ -365,9 +350,6 @@ function ZoneLegend({
           return (
             <label
               key={s.key}
-              // Match the disabled-state convention used by Button et al
-              // — opacity-50 on the whole label dims swatch + text together
-              // and reads as "disabled" without introducing a new colour.
               className={cn(
                 "flex cursor-pointer select-none items-center gap-2 text-xs transition-opacity",
                 !checked && "opacity-50"

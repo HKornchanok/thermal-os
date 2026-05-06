@@ -18,35 +18,19 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
-// Add per-column sizing hooks to ColumnMeta. Declaration-merges with the
-// filter-related additions in components/data-table/column-filter.tsx —
-// TypeScript accumulates fields across declarations.
+// Declaration-merges with column-filter.tsx — TS accumulates the fields.
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData extends RowData, TValue> {
-    /**
-     * Per-column minimum width in pixels. When set, applied as an inline
-     * style on the column's <TableHead> + <TableCell> so it overrides
-     * the table-wide cellMinWidthClass default.
-     */
+    /** Per-column minimum width in px; overrides cellMinWidthClass. */
     minWidth?: number;
   }
 }
 
 /**
- * Reusable data-table shell.
- *
- * Owns:
- *   - Visual rendering of headers, rows, cells (via shadcn primitives)
- *   - The three table-internal branches: loading, error, empty
- *   - Optional footer with: per-page selector, refreshing indicator,
- *     pagination status + Prev/Next buttons (rendered when `pagination`
- *     prop is supplied)
- *
- * Does NOT own:
- *   - The TanStack Table instance (page configures useReactTable)
- *   - Filter UI (per-column meta + <ColumnFilter />)
- *   - Filter state, including "Clear filters" button (page-owned)
+ * Reusable shell. Owns: rendering, loading/error/empty branches,
+ * optional pagination footer. Does NOT own: the TanStack Table
+ * instance, filter UI, or filter state — pages handle those.
  */
 type PaginationProps = {
   page: number;
@@ -59,12 +43,12 @@ type PaginationProps = {
 
 interface DataTableProps<TData, TValue> {
   table: TanStackTable<TData>;
-  /** Used for the colSpan on the empty-state row. */
+  /** colSpan target for the empty-state row. */
   columns: ColumnDef<TData, TValue>[];
 
   isLoading?: boolean;
   isError?: boolean;
-  /** TanStack Query `isFetching` — drives the inline "Refreshing" spinner. */
+  /** TanStack Query `isFetching` drives the inline "Refreshing" spinner. */
   isFetching?: boolean;
   error?: unknown;
 
@@ -72,8 +56,7 @@ interface DataTableProps<TData, TValue> {
   errorMessage?: string;
   emptyMessage?: string;
 
-  /** Optional. When provided, renders the footer with page-size +
-   *  pagination controls. Omit for tables that don't paginate. */
+  /** Renders the pagination footer when supplied. */
   pagination?: PaginationProps;
 
   testIds?: {
@@ -89,7 +72,7 @@ interface DataTableProps<TData, TValue> {
     clearFilters?: string;
   };
 
-  /** Override the default 120px minimum cell width if needed. */
+  /** Defaults to a 120px minimum. */
   cellMinWidthClass?: string;
 }
 
@@ -134,14 +117,6 @@ export function DataTable<TData, TValue>({
                 return (
                   <TableHead
                     key={header.id}
-                    // Per-column meta.minWidth wins over the table-wide
-                    // default; inline `min-width` style takes precedence
-                    // over the Tailwind class.
-                    //
-                    // The `after:` pseudo paints a thin vertical separator
-                    // on the cell's right edge, centred vertically and 50%
-                    // of the cell height. `last:after:hidden` suppresses it
-                    // on the last column.
                     className={cn(
                       "relative after:absolute after:right-0 after:top-1/4 after:h-1/2 after:w-px after:bg-border after:content-[''] last:after:hidden",
                       cellMinWidthClass
@@ -162,9 +137,7 @@ export function DataTable<TData, TValue>({
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
-            // Empty state lives inside <TableBody> so the header row (with
-            // filter-funnel buttons) stays visible — users can adjust filters
-            // without scrolling away.
+            // Inside <TableBody> so header filters stay visible.
             <TableRow>
               <TableCell
                 colSpan={columns.length}
@@ -265,9 +238,6 @@ function DataTableFooter<TData>({
           </span>
         )}
         {hasActiveFilter && (
-          // table.resetColumnFilters() fires through onColumnFiltersChange,
-          // so the page's wrapped setter (which also resets to page 1)
-          // runs automatically — no separate "and reset page" prop needed.
           <Button
             data-testid={testIds?.clearFilters ?? "clear-filters"}
             variant="ghost"

@@ -12,8 +12,7 @@ import { useMachines } from "@/lib/hooks/use-machines";
 import { fmtNum } from "@/lib/utils";
 
 export default function OverviewPage() {
-  // AuthGate in _app.tsx handles unauthenticated redirects + the loading
-  // spinner before this page mounts, so `session` is always present here.
+  // AuthGate handles unauthenticated state, so session is always present.
   const { data: session } = useSession();
   const router = useRouter();
 
@@ -24,9 +23,6 @@ export default function OverviewPage() {
   const alerts = alertsQuery.data ?? [];
   const machines = machinesQuery.data ?? [];
 
-  // Trend hint colour for the today's-kWh card. Server returns null when
-  // there is no yesterday baseline (first-day data); show "no baseline"
-  // rather than a misleading "—".
   const trendHint = (trend: number | null) => {
     if (trend === null) {
       return { text: "no baseline yet", className: "text-muted-foreground" };
@@ -57,7 +53,6 @@ export default function OverviewPage() {
         </p>
       </div>
 
-      {/* Alerts — only renders when there are any. */}
       {alertsQuery.isSuccess && alerts.length > 0 && (
         <section className="mt-4">
           <AlertBanner
@@ -67,7 +62,6 @@ export default function OverviewPage() {
         </section>
       )}
 
-      {/* KPIs */}
       <section className="mt-4" data-testid="overview-kpis">
         <QueryStateRenderer
           query={summaryQuery}
@@ -127,7 +121,6 @@ export default function OverviewPage() {
         </QueryStateRenderer>
       </section>
 
-      {/* Machine grid */}
       <section className="mt-6">
         <div className="mb-3 flex items-baseline justify-between gap-4">
           <h2 className="m-0 text-sm font-medium text-muted-foreground">

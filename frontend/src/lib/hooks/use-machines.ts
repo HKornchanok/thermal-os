@@ -3,13 +3,7 @@ import { useSession } from "next-auth/react";
 
 import { apiFetch, type Machine } from "@/lib/api";
 
-/**
- * All 12 machines plus each machine's most recent sensor reading.
- *
- * Live page — refetchInterval: 30s — so the status dot, latest power,
- * temperature, etc. on each MachineCard tick over without a manual
- * reload.
- */
+/** All machines + latest reading; live (30s refetch). */
 export function useMachines() {
   const { data: session } = useSession();
   const token = session?.accessToken ?? null;

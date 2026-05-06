@@ -4,22 +4,12 @@ import { useSession } from "next-auth/react";
 import { apiFetch, toSearchParams, type BuildingEnergyPoint } from "@/lib/api";
 
 export type BuildingEnergyParams = {
-  /** ISO 8601. Server defaults to `to` − 24 hours. */
   from?: string;
-  /** ISO 8601. Server defaults to MAX(recorded_at). */
   to?: string;
-  /** Backend allowlist: 15min | 1h. Defaults server-side to 1h. */
   bucket?: "15min" | "1h";
 };
 
-/**
- * Building-wide power timeseries.
- *
- * Lives on the Energy page, which is a "live" view — refetchInterval is
- * set to 30s per DESIGN.md §1C. keepPreviousData keeps the previous
- * window visible while paging the date back/forward, so the area
- * chart doesn't flash empty between requests.
- */
+/** Live (30s refetch); keeps previous data visible while paging dates. */
 export function useBuildingEnergy(params: BuildingEnergyParams = {}) {
   const { data: session } = useSession();
   const token = session?.accessToken ?? null;

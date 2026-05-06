@@ -1,14 +1,6 @@
 import type { ReadingStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-/**
- * ON / OFF status pill with a coloured dot.
- *   ON  → primary (green) dot, primary text
- *   OFF → muted dot + muted text
- *
- * Used on /machines cards and the detail panel; the same primitive can
- * decorate any future row that needs to read "this thing is alive".
- */
 export function StatusBadge({
   status,
   className,

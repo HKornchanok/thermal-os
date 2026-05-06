@@ -3,15 +3,6 @@ import { cn } from "@/lib/utils";
 
 import { StatusBadge } from "./status-badge";
 
-/**
- * One machine in the grid. Shows name, zone, current power (or speed
- * for fans), and ON/OFF status. Optionally clickable: when `onClick`
- * is supplied, the card becomes a button-like surface that highlights
- * on hover and renders a primary border when `selected` is true.
- *
- * The card stays presentational — the page owns selection state and
- * the URL `?selected=...` synchronization.
- */
 interface MachineCardProps {
   machine: Machine;
   selected?: boolean;
@@ -28,8 +19,7 @@ export function MachineCard({
   const r = machine.latest_reading;
   const isInteractive = !!onClick;
 
-  // Primary metric for the card body: power for ACs/critical machines,
-  // speed for fans (when available — fans store speed_pct, not power).
+  // Fans show speed; everything else shows power.
   const primary =
     machine.machine_type === "fan" &&
     r?.speed_pct !== null &&

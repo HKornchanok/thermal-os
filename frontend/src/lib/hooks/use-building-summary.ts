@@ -3,15 +3,7 @@ import { useSession } from "next-auth/react";
 
 import { apiFetch, type BuildingSummary } from "@/lib/api";
 
-/**
- * Single-row building snapshot used for the Overview KPIs:
- * total / active / inactive machines, current total power, today's
- * kWh + day-over-day trend, average ON-AC temperature.
- *
- * Server computes against MAX(recorded_at) — not wall-clock now() —
- * so seeded data still reads as "today". Refetch every 30s so the
- * KPIs tick over while the page is open.
- */
+/** Overview KPI snapshot; live (30s refetch). */
 export function useBuildingSummary() {
   const { data: session } = useSession();
   const token = session?.accessToken ?? null;

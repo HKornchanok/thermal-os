@@ -18,21 +18,7 @@ export type MachineSensorsParams = {
   to?: string;
 };
 
-/**
- * Time-bucketed sensor readings for a single machine.
- *
- * Server-side smart defaults:
- *   - metric defaults to "power_kw"
- *   - bucket defaults to "5min"
- *   - from / to default to the day of MAX(recorded_at) for that machine
- *     (chart always has data on first load even if the seed is older
- *      than the wall clock)
- *
- * `keepPreviousData` keeps the previous metric / bucket visible while the
- * new request is in flight, so toggling Tabs doesn't blank the chart.
- * `enabled` gates on a non-zero machineId so the hook is no-op until the
- * user picks a machine in the grid.
- */
+/** keepPreviousData smooths metric-tab toggles; gated on a non-zero id. */
 export function useMachineSensors({
   machineId,
   metric,

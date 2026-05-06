@@ -22,8 +22,6 @@ type NavItem = {
   icon: LucideIcon;
 };
 
-// Six entries from DESIGN.md §1C component tree, in the exact order
-// they appear there.
 const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
   { href: "/machines", label: "Machines", icon: Cpu },
@@ -38,10 +36,8 @@ const STORAGE_KEY = "thermalos.sidebar.collapsed";
 export function Sidebar() {
   const router = useRouter();
 
-  // Default expanded; on the client, hydrate the persisted preference.
-  // SSR + first client render both produce expanded markup so the
-  // hydration HTML matches; the layout snaps to the saved state on the
-  // next paint (transition-[width] keeps it visually smooth).
+  // Default expanded so SSR/first-render markup matches; hydrate
+  // persisted preference on mount.
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     if (
@@ -58,7 +54,7 @@ export function Sidebar() {
       try {
         localStorage.setItem(STORAGE_KEY, String(next));
       } catch {
-        /* private mode etc — toggle still works in-memory */
+        /* private mode — toggle stays in-memory */
       }
       return next;
     });

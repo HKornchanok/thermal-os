@@ -4,23 +4,14 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
-/**
- * Cycles through light → dark → system → light.
- *
- * Three states (rather than a binary toggle) so users can opt back into
- * "follow OS" without clearing localStorage. The icon shows the CURRENT
- * setting, not where the next click leads.
- *
- * The component renders a placeholder on the server and the first client
- * render — the actual theme isn't known until next-themes hydrates from
- * storage / matchMedia. This avoids the React hydration-mismatch warning.
- */
+/** Cycles light → dark → system. Icon shows the CURRENT setting. */
 export function ThemeToggle({ className }: { className?: string }) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
+  // Render a placeholder until next-themes hydrates to avoid SSR mismatch.
   if (!mounted) {
     return (
       <Button
