@@ -1,7 +1,8 @@
 # ThermalOS — System Design
 
-> Problem 1 of the AltoTech Full-Stack Assessment:
-> database schema, API contracts, and frontend component planning.
+> Database schema, API contracts, and frontend architecture for the
+> ThermalOS building energy dashboard. This document describes the
+> system as built — read alongside the running code.
 
 ---
 
@@ -75,9 +76,10 @@ down) or show reduced load. Keeping them separate makes both independently query
 
 **Sensor vs. AI command — how they differ:**
 Sensor readings are high-frequency (every 5 minutes × 12 machines = 3,456 rows/day),
-stored in a hypertable optimised for range scans. AI decisions are sparse events (~23
-records/day), stored in a plain table. They share `machine_id` as a foreign key but are
-never joined in hot-path queries — the dashboard renders them on separate pages.
+stored in a hypertable optimised for range scans. AI decisions are sparse events
+(~10/day during the AI period, brief target 8–12), stored in a plain table. They
+share `machine_id` as a foreign key but are never joined in hot-path queries — the
+dashboard renders them on separate pages.
 
 #### `building_aidecision` — sparse event log
 
@@ -94,7 +96,7 @@ CREATE TABLE building_aidecision (
 CREATE INDEX ON building_aidecision (decided_at DESC);
 ```
 
-**Why not a hypertable?** AI decisions are sparse (~23/day vs 3,456 sensor
+**Why not a hypertable?** AI decisions are sparse (~10/day vs 3,456 sensor
 readings/day). A plain B-tree index on `decided_at` is faster for sparse event logs.
 TimescaleDB adds chunk management overhead that only pays off for high-cardinality
 time-series.
@@ -140,6 +142,42 @@ chunk-aware and reads only the relevant partitions.
 **Why `DISTINCT ON` instead of a subquery join?** `DISTINCT ON (machine_id) ORDER BY
 machine_id, recorded_at DESC` is a single index scan. The equivalent `WHERE recorded_at
 = (SELECT MAX(...))` requires one subquery per machine — ~12× slower for 12 machines.
+
+### Seed shape
+
+7 days of 5-minute readings × 12 machines = **24,192 sensor rows**. Split
+3 manual / 4 AI per the brief's Before/After framing:
+
+- **Days 1–3 (manual)**: every non-critical machine runs 06:00–22:00 flat,
+  setpoints stuck at 25°C, ~78% load on hot afternoons. No AI decisions
+  logged.
+- **Days 4–7 (AI control)**: zone-aware schedule (lobby extended hours, main
+  floors 06:00–19:00, offices 07:00–18:30, meeting rooms close at 14:30 when
+  empty), dynamic setpoints, ~65% load. ~10 AI decisions per day = **40 total**.
+
+**Per-day variation via `DayPlan`.** Each AI day gets an immutable plan
+(outdoor peak 32–36°C, decision times jittered ±15–30 min, setpoints
+jittered ±0.5°C, conditional events on hot/cool days). The plan drives
+*both* sensor reading generation and decision log emission so the chart
+shows the change at the same minute the decision logs it. Per-day RNG
+seeded by `(global_seed × 100 + day_index + 1)` so re-runs reproduce.
+
+**Bangkok timezone anchor.** The building is in Bangkok. Seed timestamps
+anchor at midnight Bangkok (UTC+7), not UTC. Django stores tz-aware
+datetimes as UTC (`USE_TZ=True`) so the round-trip is correct: 22:00
+Bangkok → 15:00 UTC stored → 22:00 local rendered for a Bangkok viewer.
+Without this, the schedule would be offset by +7 hours on the dashboard.
+
+**Engineered alert anomalies in the trailing window.** Three deliberate
+nudges so the Smart Alerts banner has each rule firing on first load:
+
+- AC-L1 last hour held at ~41.4 kW (over-cooling, "valve stuck open"
+  failure pattern) → fires `power_spike`.
+- AC-S2 last reading temp 27.1°C vs setpoint 24.0°C → fires `temp_drift`.
+- AC-L3 last 19 hours forced ON → fires `nonstop_runtime`.
+
+Tuned to the values `test_alerts.py` asserts so the rule plumbing stays
+verified end-to-end.
 
 ---
 
@@ -242,15 +280,17 @@ Machines page.
 
 | Param | Default | Values |
 |-------|---------|--------|
-| `from` | start of latest data day | ISO datetime |
-| `to` | end of latest data day | ISO datetime |
+| `from` | `to − 24 hours` | ISO datetime |
+| `to` | `MAX(recorded_at)` for this machine | ISO datetime |
 | `metric` | `power_kw` | `power_kw`, `temperature`, `setpoint`, `speed_pct` |
 | `bucket` | `5min` | `5min`, `15min`, `1h`, `1d` |
 
-**Smart default date range:** When `from`/`to` are omitted, the API queries
-`SELECT MAX(recorded_at) FROM building_sensorreading WHERE machine_id = %s` and
-defaults to the start/end of that day. This guarantees the chart shows data on first
-load, whether the data is live or seeded into the future.
+**Smart default date range:** Sliding 24-hour window ending at the machine's
+latest reading. Operations dashboards want "what happened in the last day,"
+not "today so far" which clips to ~half a day right after midnight. The
+frontend additionally overrides with the **browser's** wall-clock NOW (not
+the server's MAX) so an operator opening the page at 06:00 sees data
+spanning 06:00 yesterday → 06:00 today.
 
 **Security:** `metric` is validated against an allowlist before interpolation into the
 SQL column name — prevents SQL injection.
@@ -273,9 +313,11 @@ Live snapshot of the whole building. Polled every 30s by the Overview page.
 
 **Reference time:** Instead of `datetime.now(UTC)`, the endpoint queries
 `SELECT MAX(recorded_at) FROM building_sensorreading` and uses that as the reference
-point. "Today" = the day of `max_ts`, "yesterday" = one day before. This ensures KPIs
+point. "Today" = the **Bangkok-local day** of `max_ts` (`day_start`/`day_end` in
+`utils.py` anchor at midnight UTC+7), "yesterday" = one day before. This ensures KPIs
 always reflect the latest available data, whether the data is live or seeded into the
-future. Returns an empty/zero response if no data exists.
+future, and that "today" matches what an on-site operator calls "today." Returns an
+empty/zero response if no data exists.
 
 **Response:**
 ```json
@@ -555,9 +597,10 @@ Results from all three queries are merged and sorted by severity (critical first
 
 ### `POST /api/chat/` (Bonus — Option A)
 
-AI chat assistant grounded in live building data. Uses the Anthropic API (Claude) with
-a system prompt injected with real-time machine status, today/yesterday energy totals,
-and the last 20 AI decisions.
+AI chat assistant grounded in live building telemetry. Uses the Anthropic API
+(`claude-sonnet-4-6`) with a system prompt that pumps six slices of real data so
+the model can answer diagnostic questions ("why was yesterday high?") without
+hedging.
 
 **Request:**
 ```json
@@ -566,11 +609,40 @@ and the last 20 AI decisions.
 
 **Response:**
 ```json
-{ "reply": "Yesterday's total was 398.7 kWh, compared to today's 342.1 kWh so far. The main contributors were AC-L2 and AC-L3 running at peak load between 08:00–17:00..." }
+{ "reply": "Yesterday's total was 1,690.29 kWh — peak load of 1,580 kW hit at 14:00 UTC (21:00 BKK), driven mainly by Zone B (Floors 1-3) which alone consumed 380 kWh..." }
 ```
 
-**Graceful fallback:** If `ANTHROPIC_API_KEY` is not set, returns a message saying the
-assistant is not configured — no 500 error.
+**System prompt sections** (all from live SQL — no caching layer between
+DB and prompt):
+
+1. Machine snapshot — latest reading per machine
+2. Energy totals — today + yesterday kWh anchored at Bangkok midnight
+3. Daily kWh history — last 7 days, gives the model trend context
+4. Hourly building power — full 24h for today AND yesterday
+5. Per-zone daily kWh — today + yesterday, sorted highest first
+6. Last 40 AI decisions, covering ~3 calendar days
+
+The prompt is ~8.5 KB and sent with `cache_control: "ephemeral"` on the
+system block, so per-question cost is dominated by the user message and
+reply tokens, not the snapshot itself.
+
+**Behaviour matrix:**
+
+| Input | Status | Body |
+|-------|--------|------|
+| empty/missing `message` | 400 | `{"detail": "..."}` |
+| `ANTHROPIC_API_KEY` unset | 200 | `{"reply": "AI assistant is not configured..."}` |
+| Anthropic auth/billing/rate-limit (`APIStatusError`) | 200 | `{"reply": "⚠️ AI service error: <upstream message>"}` |
+| Network / SDK / unexpected | 502 | `{"detail": "Upstream AI error: <ClassName>"}` |
+| Happy path | 200 | `{"reply": "<assistant text>"}` |
+
+The "auth/billing → 200 with ⚠️" path lets operators see actionable upstream
+messages ("Your credit balance is too low...") in the chat surface itself,
+instead of digging into server logs to interpret a 502.
+
+**Frontend rendering:** Replies render as Markdown via `react-markdown` +
+`remark-gfm` so Sonnet's `**bold**`, headings, lists, inline code, fenced
+code, and GFM tables come through correctly. User messages stay plain text.
 
 ---
 
@@ -598,48 +670,76 @@ the data they render — never a query object or loading flag.
 _app.tsx
 ├── SessionProvider (next-auth — JWT session in httpOnly cookie)
 ├── QueryClientProvider (tanstack-query — staleTime: 60s, retry: 1)
-└── Layout (conditionally skipped for /login)
+├── ThemeProvider (next-themes — defaultTheme="dark", enableSystem)
+└── Layout (skipped for /login)
     ├── Sidebar
-    │   ├── NavLink × 6 (Overview, Machines, Energy, AI Decisions,
-    │   │                  Before/After, AI Assistant)
-    │   └── User info + Sign out
-    └── <page>
+    │   ├── ThermalOS brand + collapse toggle
+    │   ├── Separator (shadcn)
+    │   └── NavLink × 6 (Overview, Machines, Energy, AI Decisions,
+    │                     Before/After, AI Assistant)
+    ├── Header (right-aligned ThemeToggle + UserMenu dropdown)
+    └── AuthGate                       (redirects unauthenticated users to
+        │                                /login?callbackUrl=<path>; login
+        │                                page restores the URL after sign-in)
+        └── <page>
         │
         ├── pages/index.tsx             →  /
         │   ├── AlertBanner            (active alerts — critical/warning,
-        │   │                            clickable → machine detail)
+        │   │                            clickable → /machines?selected=<id>)
         │   ├── KpiCard × 6            (total machines, active, inactive,
         │   │                            total power, today kWh, avg temp)
         │   └── MachineCard × 12       (card grid of all machines)
         │
-        ├── pages/machines.tsx          →  /machines
+        ├── pages/machines.tsx          →  /machines (selection in ?selected=<id>)
         │   ├── MachineCard × 12       (clickable — selects machine)
         │   └── [detail panel]         (shown when a machine is selected)
         │       ├── StatusBadge
-        │       ├── Tabs               (shadcn — metric selector)
-        │       └── SensorChart        (Recharts AreaChart)
+        │       ├── Tabs               (shadcn — metric selector with
+        │       │                        invalid combos disabled: fans get
+        │       │                        no temp/setpoint, ACs no speed)
+        │       └── AreaChart          (5-min buckets, hour-aligned X ticks,
+        │                                vertical "now" reference line)
         │
         ├── pages/energy.tsx            →  /energy
         │   ├── Date nav buttons       (← Prev / Next →)
         │   ├── View toggle            (Total / By Zone)
         │   ├── Bucket toggle          (15min / 1h)
-        │   ├── Summary stats          (peak, average, data points)
-        │   └── Recharts AreaChart     (total_kw or StackedAreaChart by zone)
+        │   ├── ZoneLegend             (per-zone show/hide checkboxes,
+        │   │                            "Show all" / "Hide all", visible
+        │   │                            only in By Zone view)
+        │   ├── KpiCard × 3            (peak, average, data points)
+        │   └── AreaChart              (total_kw, or stacked by zone)
         │
         ├── pages/decisions.tsx         →  /decisions
-        │   ├── Date range + action filter
-        │   ├── shadcn/Table + Badge   (decision log with color-coded actions)
-        │   └── Pagination controls    (← Prev / Page N of M / Next →)
+        │   ├── DataTable (TanStack Table v8 + shadcn Table + Badge)
+        │   │   └── ColumnFilter popovers in each header (funnel icon):
+        │   │       ├── When           (date operator: between / on / before /
+        │   │       │                    same_or_before / after / same_or_after)
+        │   │       ├── Action         (multi-select with checkboxes)
+        │   │       └── Machine        (text contains)
+        │   ├── Refreshing indicator  (spinner during background refetch)
+        │   └── Pagination footer      (per-page Select + Prev / Page N of M / Next)
         │
         ├── pages/compare.tsx           →  /compare
-        │   ├── Date range picker × 2  (Period A, Period B — <input type="date">)
+        │   ├── PeriodPicker × 2       (Period A bounded to manual window,
+        │   │                            Period B bounded to AI window;
+        │   │                            defaults to first 3 vs first 3 days
+        │   │                            for an equal-length comparison)
+        │   ├── Reset to defaults      (visible only when inputs differ)
         │   ├── KpiCard × 3            (before avg, after avg, savings %)
-        │   └── Recharts BarChart      (side-by-side bar comparison)
+        │   └── AreaChart              (overlaid Before/After on a shared
+        │                                "hours from period start" X axis;
+        │                                yellow = manual era, green = AI era;
+        │                                custom tooltip shows the per-hour
+        │                                diff prefixed +/− with savings %)
         │
         ├── pages/chat.tsx              →  /chat  (Bonus — Option A)
-        │   ├── Example question chips (clickable quick-starts)
-        │   ├── Message list           (user + assistant bubbles)
-        │   └── Text input + Send      (form with loading/error states)
+        │   ├── EmptyChat              (Sparkles icon + 4 example chips)
+        │   ├── MessageBubble × N      (user = primary-tinted plain text,
+        │   │                            assistant = muted bg + Markdown
+        │   │                            rendered via MarkdownMessage)
+        │   └── Composer               (textarea with ⌘/Ctrl+Enter shortcut;
+        │                                disabled during pending request)
         │
         └── pages/login.tsx             →  /login
             └── Credentials form       (username + password → NextAuth signIn)
@@ -682,19 +782,19 @@ rewrite strategy.
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| `KpiCard` | `dashboard/` | Label + value + optional trend arrow (↑/↓) |
-| `MachineCard` | `dashboard/` | Machine status tile: name, zone, power, status |
-| `StatusBadge` | `dashboard/` | ON (green dot) / OFF (muted) indicator |
-| `SensorChart` | `dashboard/` | Recharts AreaChart with consistent axis/tooltip styling |
-| `AlertBanner` | `dashboard/` | Stacked alert list — red border (critical), amber (warning). Clickable → machine detail |
-| `LoadingState` | `dashboard/` | Spinner with message |
-| `ErrorState` | `dashboard/` | Red error message |
-| `EmptyState` | `dashboard/` | Gray empty-data message |
-| `Table` | `ui/` (shadcn) | Generated table primitives — used in decisions page |
-| `Tabs` | `ui/` (shadcn) | Generated tab primitives — used in machine detail |
-| `Badge` | `ui/` (shadcn) | Action type labels (turn_on, turn_off, set_temp) |
-| `Select` | `ui/` (shadcn) | Filter dropdowns |
-| `Separator` | `ui/` (shadcn) | Visual dividers in sidebar |
+| `KpiCard` | `dashboard/` | Label + value + optional `hint` slot for trend % / units |
+| `MachineCard` | `dashboard/` | Machine status tile: name, zone, primary metric, StatusBadge |
+| `StatusBadge` | `dashboard/` | ON (primary green) / OFF (muted) pill |
+| `AreaChart` | `dashboard/` | Recharts wrapper. Props: `mode` (area/line), `xTicks` (pre-thinned), `nowLine` (vertical reference at NOW), `tooltipContent` (full custom slot) |
+| `MarkdownMessage` | `dashboard/` | Renders Markdown via `react-markdown` + `remark-gfm` for chat replies |
+| `AlertBanner` | `dashboard/` | Stacked alert list — destructive (critical), muted (warning). Clickable → `/machines?selected=<id>` |
+| `LoadingState` | `dashboard/` | `Loader2` spinner + message |
+| `ErrorState` | `dashboard/` | `CircleAlert` + destructive message |
+| `DataTable` | `data-table/` | TanStack Table v8 wrapper with column-header filter popovers, manual pagination, refreshing indicator |
+| `ColumnFilter` | `data-table/` | Funnel-icon popover with date / multiselect / select / text variants |
+| `AuthGate` | `layout/` | Wraps protected routes; redirects to `/login?callbackUrl=…` when unauthenticated |
+| `Sidebar`, `Header`, `UserMenu`, `ThemeToggle` | `layout/` | Shell + auth UI |
+| `Table`, `Tabs`, `Badge`, `Button`, `Select`, `Separator`, `Popover`, `DropdownMenu` | `ui/` (shadcn) | Standard primitives |
 
 ### Number Formatting
 
@@ -751,8 +851,12 @@ The UI uses the **tweakcn "green with yellow"** theme
 (`npx shadcn@latest add https://tweakcn.com/r/themes/cmlewiz0s000304l7hc2n2l1z`),
 which provides both light and dark mode via CSS variables in OKLCH color space.
 
-**Fonts:** Inter (sans-serif), JetBrains Mono (monospace), Georgia (serif).
+**Fonts:** Inter (sans-serif), JetBrains Mono (monospace). Loaded via
+`next/font/google` with `variable: --font-sans` / `--font-mono` so the
+theme references them as CSS variables.
 **Border radius:** 0.5rem. **Spacing unit:** 0.25rem.
+**Default theme:** dark (control-room context). `<ThemeToggle>` cycles
+through light → dark → system; choice persists in localStorage.
 
 Key CSS variables (dark mode — the default for a monitoring dashboard):
 
@@ -803,8 +907,65 @@ don't compose with TanStack Query's `refetchInterval` and would require `"use cl
 every component. Pages Router is the right tool.
 
 **Flat hypertable vs continuous aggregates**
-For the current data volume (~120k readings over 35 days), raw `time_bucket` queries
+For the current data volume (~24k readings over 7 days), raw `time_bucket` queries
 execute in < 50ms. Continuous aggregates add materialized view management complexity
 that isn't justified until the dataset grows to millions of rows. This is noted as a
 future optimisation in the README.
+
+**Bangkok timezone anchoring**
+The seed timestamps + `day_start` / `day_end` helpers anchor at Bangkok midnight,
+not UTC. The brief describes a Bangkok building; UTC anchoring made the dashboard
+show "06:00 building opens" at 13:00 local. Hardcoding `BANGKOK_TZ` in `utils.py`
+matches the seed and avoids threading a timezone parameter through every helper.
+A multi-region production system would move this to `settings.BUILDING_TIMEZONE`.
+
+**Per-day variation via `DayPlan`**
+Every AI day's decisions used to be identical: same 10 events at the same minute
+with the same setpoint values. Real AI control varies day to day in response to
+weather and occupancy. `DayPlan` is the single source of truth per day — drives
+both sensor readings and decision emission, so the chart shows the change at the
+same minute the decision logs it. Without this single source, the two would drift
+and the dashboard story would stop being internally consistent.
+
+**Engineered alert anomalies in the seed**
+The Smart Alerts feature is the most prominent thing on the Overview banner. With
+a clean seed, all three rules would silently pass and the banner would render
+empty — a confusing demo for a feature whose entire value is "is the building
+behaving normally?" The seed deliberately injects one of each rule's pattern in
+the trailing window, tuned to the values `test_alerts.py` asserts against so the
+rule plumbing stays verified end-to-end.
+
+**Compare chart: overlay AreaChart over BarChart**
+Two periods plotted as side-by-side bars compare totals well but lose the curve
+shape — the AI's value is visible most strongly in the *shape* of the daily
+load curve (later ramp-up, deeper midday cooling, earlier evening shutdown).
+Overlaying the two periods on a shared "hours from period start" X axis
+preserves that shape while still showing the magnitude difference. The custom
+tooltip restores the per-bar comparison ("After: 820 kW; Before: 1,180 kW;
+diff: −360 kW / −30.5%") so no information is lost.
+
+**Decisions filters in column-header popovers**
+Page-level filter controls take vertical space and lose the column they filter.
+Funnel-icon popovers in each header cluster the filter controls next to their
+data, support multi-select / six date operators / text-contains without crowding
+the page chrome, and the active-filter dot reminds the user a filter is in
+effect when the data looks suspiciously sparse.
+
+**Chat: rich context + Markdown rendering**
+A minimal system prompt (machine snapshot + 2 totals + 20 decisions) made the
+model hedge on diagnostic questions like "why was yesterday high?" because the
+data wasn't actually in the prompt. The richer prompt (six slices including
+hourly + per-zone + 7-day daily history + 40 decisions) is ~8.5 KB cached on
+the system block, so per-question cost is dominated by the user message and
+reply. Markdown rendering matters because Sonnet's outputs lean heavily on
+`**bold**`, headings, lists, and GFM tables — rendering them as text via
+`whitespace-pre-wrap` is bad UX.
+
+**Pre-commit formatting via Husky + lint-staged**
+Prettier formats only the staged files in the current commit (not a whole-tree
+pass on every commit). The pre-commit hook means "prettier-only" diffs in later
+PRs become impossible — every commit lands already-formatted. Husky commits the
+hook scripts to `.husky/` so a fresh clone gets the hook on `npm install`,
+unlike a hand-written `.git/hooks/` script which would be invisible to other
+contributors.
 
