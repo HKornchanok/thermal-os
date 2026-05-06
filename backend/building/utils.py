@@ -74,11 +74,25 @@ def get_min_max_recorded_at() -> tuple[Optional[datetime], Optional[datetime]]:
     return (row[0], row[1]) if row else (None, None)
 
 
+# The building lives in Bangkok, so day boundaries here are Bangkok local
+# (00:00 → 24:00 BKK). Without this anchor, "today's energy" on the
+# Overview KPIs and the default 24-hour window on /machines would start at
+# UTC midnight = 07:00 BKK — which makes the chart show only 17 hours of
+# the actual local day and a 7-hour gap before the next "day" starts.
+BANGKOK_TZ = timezone(timedelta(hours=7))
+
+
 def day_start(dt: datetime) -> datetime:
-    """UTC midnight of the given datetime's date."""
-    return datetime.combine(dt.date(), time.min, tzinfo=timezone.utc)
+    """Bangkok midnight of the given datetime's local date.
+
+    Returned datetime is timezone-aware in Bangkok TZ. Django's USE_TZ=True
+    converts this to the right UTC instant for SQL parameter binding when
+    the call site passes it as a query param.
+    """
+    bkk = dt.astimezone(BANGKOK_TZ)
+    return datetime.combine(bkk.date(), time.min, tzinfo=BANGKOK_TZ)
 
 
 def day_end(dt: datetime) -> datetime:
-    """UTC midnight of the day AFTER the given datetime — exclusive end-of-day."""
+    """Bangkok midnight of the day AFTER the given datetime — exclusive end."""
     return day_start(dt) + timedelta(days=1)

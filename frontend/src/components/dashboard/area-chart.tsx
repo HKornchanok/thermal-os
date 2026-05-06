@@ -2,6 +2,7 @@ import {
   Area,
   AreaChart as RechartsAreaChart,
   CartesianGrid,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -74,6 +75,13 @@ export interface AreaChartProps<TData extends Record<string, any>> {
    * pre-thinned list (one per hour, etc.) to control tick density.
    */
   xTicks?: ReadonlyArray<string | number>;
+  /**
+   * Optional X-axis position for a "now" indicator — a vertical dashed
+   * line marking the current wall-clock time. The value type must
+   * match the chart's xKey domain (typically an ISO timestamp string).
+   * When omitted, no reference line renders.
+   */
+  nowLine?: string | number;
   /** Format y-axis tick labels (e.g. number → "32 kW"). */
   yTickFormatter?: (value: unknown) => string;
   /** Format the tooltip's heading (the x-value of the hovered bucket). */
@@ -103,6 +111,7 @@ export function AreaChart<TData extends Record<string, any>>({
   className,
   xTickFormatter,
   xTicks,
+  nowLine,
   yTickFormatter,
   tooltipLabelFormatter,
   tooltipFormatter,
@@ -191,6 +200,23 @@ export function AreaChart<TData extends Record<string, any>>({
             labelFormatter={tooltipLabelFormatter}
             formatter={tooltipFormatter}
           />
+
+          {nowLine !== undefined && (
+            <ReferenceLine
+              x={nowLine}
+              stroke="var(--primary)"
+              strokeWidth={1.5}
+              strokeDasharray="3 3"
+              ifOverflow="extendDomain"
+              label={{
+                value: "now",
+                position: "top",
+                fill: "var(--primary)",
+                fontSize: 10,
+                fontFamily: "var(--font-mono)",
+              }}
+            />
+          )}
 
           {series.map((s, i) => {
             const color = colorFor(s, i);
