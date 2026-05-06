@@ -1,13 +1,17 @@
 import Head from "next/head";
 import { useEffect, useMemo, useState } from "react";
 
-import { AreaChart } from "@/components/dashboard/area-chart";
+import {
+  AreaChart,
+  type ChartTooltipProps,
+} from "@/components/dashboard/area-chart";
 import { ErrorState, LoadingState } from "@/components/dashboard/states";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { Button } from "@/components/ui/button";
+import { colorForSeriesIndex } from "@/lib/chart";
 import { useBuildingEnergy } from "@/lib/hooks/use-building-energy";
 import { useEnergyCompare } from "@/lib/hooks/use-energy-compare";
-import { fmtNum } from "@/lib/utils";
+import { cn, fmtNum } from "@/lib/utils";
 
 const SERIES_BEFORE = "Before AI";
 const SERIES_AFTER = "After AI";
@@ -335,19 +339,17 @@ export default function ComparePage() {
             <AreaChart
               data={chartData}
               xKey="offsetHours"
-              series={[{ key: SERIES_BEFORE }, { key: SERIES_AFTER }]}
+              series={[
+                // Before AI = yellow (manual era), After AI = green (AI era).
+                // Pinning explicitly so the colours track the narrative
+                // ("AI is the green one") regardless of where these series
+                // happen to sit in the default palette order.
+                { key: SERIES_BEFORE, color: "var(--chart-2)" },
+                { key: SERIES_AFTER, color: "var(--chart-1)" },
+              ]}
               xTickFormatter={(v) => `${v}h`}
               yTickFormatter={(v) => `${fmtNum(v as number, 0)} kW`}
-              tooltipLabelFormatter={(v) => {
-                const hours = v as number;
-                const days = Math.floor(hours / 24);
-                const rem = hours % 24;
-                return days > 0 ? `Day ${days + 1}, h+${rem}` : `h+${hours}`;
-              }}
-              tooltipFormatter={(v, name) => [
-                `${fmtNum(v as number)} kW`,
-                name,
-              ]}
+              tooltipContent={CompareDiffTooltip}
             />
           )}
         </section>
@@ -411,6 +413,110 @@ function PeriodPicker({
           Available data: {minDate} → {maxDate}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * Custom Recharts tooltip for /compare. Adds a "Diff" footer row that
+ * shows the savings (or regression) between the Before AI and After AI
+ * series at the hovered hour — the whole point of this page is the
+ * delta, so making the user mentally subtract two numbers is bad UX.
+ *
+ * Returns null when the cursor isn't active or either series has no
+ * value at this offset (the periods can have different lengths; one
+ * line stops sooner than the other).
+ */
+function CompareDiffTooltip({ active, payload, label }: ChartTooltipProps) {
+  if (!active || !payload?.length) return null;
+
+  const beforeRow = payload.find((p) => p.name === SERIES_BEFORE);
+  const afterRow = payload.find((p) => p.name === SERIES_AFTER);
+  const before = typeof beforeRow?.value === "number" ? beforeRow.value : null;
+  const after = typeof afterRow?.value === "number" ? afterRow.value : null;
+
+  // Header label — same translation as the page intro: "Day N, h+M".
+  const hours = typeof label === "number" ? label : Number(label);
+  const headerText = Number.isFinite(hours)
+    ? hours >= 24
+      ? `Day ${Math.floor(hours / 24) + 1}, h+${hours % 24}`
+      : `h+${hours}`
+    : String(label);
+
+  // Diff is signed: AFTER − BEFORE. Negative ⇒ AI uses less ⇒ savings.
+  const diff = before !== null && after !== null ? after - before : null;
+  const pct =
+    diff !== null && before && before > 0 ? (diff / before) * 100 : null;
+
+  // Match the existing Recharts tooltip's surface styling — it normally
+  // comes from CHART_TOOLTIP_CONTENT_STYLE on the wrapping <Tooltip>;
+  // since `content` overrides the default body, we re-create the surface
+  // here with Tailwind so light/dark theming + radius match.
+  return (
+    <div
+      className="rounded border border-border bg-card px-2.5 py-2 font-mono text-xs text-foreground shadow-sm"
+      role="status"
+    >
+      <p className="mb-1 font-semibold">{headerText}</p>
+      <div className="flex flex-col gap-0.5">
+        <Row
+          name={SERIES_BEFORE}
+          value={before}
+          color={beforeRow?.color ?? colorForSeriesIndex(0)}
+        />
+        <Row
+          name={SERIES_AFTER}
+          value={after}
+          color={afterRow?.color ?? colorForSeriesIndex(1)}
+        />
+      </div>
+      {diff !== null && (
+        <div className="mt-1.5 border-t border-border pt-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">Diff</span>
+            <span
+              className={cn(
+                "font-semibold",
+                diff < 0
+                  ? "text-primary"
+                  : diff > 0
+                    ? "text-destructive"
+                    : "text-foreground"
+              )}
+            >
+              {diff > 0 ? "+" : diff < 0 ? "−" : ""}
+              {fmtNum(Math.abs(diff))} kW
+              {pct !== null
+                ? ` (${diff > 0 ? "+" : diff < 0 ? "−" : ""}${Math.abs(pct).toFixed(1)}%)`
+                : ""}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Row({
+  name,
+  value,
+  color,
+}: {
+  name: string;
+  value: number | null;
+  color: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="flex items-center gap-1.5">
+        <span
+          className="inline-block size-2 rounded-sm"
+          style={{ backgroundColor: color }}
+          aria-hidden
+        />
+        {name}
+      </span>
+      <span>{value !== null ? `${fmtNum(value)} kW` : "—"}</span>
     </div>
   );
 }
