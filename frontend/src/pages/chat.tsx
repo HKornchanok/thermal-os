@@ -2,6 +2,7 @@ import Head from "next/head";
 import { Send, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { MarkdownMessage } from "@/components/dashboard/markdown-message";
 import { Button } from "@/components/ui/button";
 import { useChat } from "@/lib/hooks/use-chat";
 import { cn } from "@/lib/utils";
@@ -204,13 +205,18 @@ function MessageBubble({
     >
       <div
         className={cn(
-          "max-w-[85%] whitespace-pre-wrap rounded-lg border px-3 py-2 text-sm",
+          "max-w-[85%] rounded-lg border px-3 py-2 text-sm",
+          // User messages stay plain text (no markdown parsing) so a
+          // typed `**` or `_` shows literally — operators don't expect
+          // their own input to be reformatted. Assistant messages render
+          // as markdown so Sonnet's bold / lists / tables / code come
+          // through correctly.
           isUser
-            ? "border-primary/40 bg-primary/10 text-foreground"
+            ? "border-primary/40 bg-primary/10 whitespace-pre-wrap text-foreground"
             : "bg-muted/40 border-border text-foreground"
         )}
       >
-        {content}
+        {isUser ? content : <MarkdownMessage content={content} />}
       </div>
     </div>
   );
