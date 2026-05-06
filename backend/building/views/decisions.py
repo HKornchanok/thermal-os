@@ -1,6 +1,5 @@
 """Paginated AI decision log endpoint."""
 
-from datetime import timedelta
 from math import ceil
 
 from django.db import connection
@@ -10,13 +9,11 @@ from rest_framework.response import Response
 from building import sql
 from building.utils import (
     ALLOWED_ACTIONS,
-    get_max_recorded_at,
     parse_iso_datetime,
+    resolve_window,
 )
 
 
-# Caps page_size to a sane range. Design says default 20, common sizes
-# 10/20/50; we allow 1-100 for flexibility while keeping query cost bounded.
 PAGE_SIZE_MIN = 1
 PAGE_SIZE_MAX = 100
 
@@ -25,24 +22,11 @@ PAGE_SIZE_MAX = 100
 def decisions_list(request):
     """Server-side paginated AI decision log.
 
-    Query params (all optional):
-        from        ISO 8601 datetime  default = `to` − 7 days
-        to          ISO 8601 datetime  default = MAX(recorded_at)
-        action      ∈ {turn_on, turn_off, set_temp}  default = no filter
-        page        int >= 1           default 1
-        page_size   int in [1, 100]    default 20
-
-    Returns the standard paginated envelope:
-        {
-          "count":       <int total matching rows>,
-          "page":        <int>,
-          "page_size":   <int>,
-          "total_pages": <int>,
-          "results":     [ <DecisionItem>, ... ]
-        }
-
-    Decisions whose machine has been deleted (ON DELETE SET NULL) still
-    appear with machine_name = null so the audit trail is preserved.
+    Params: from/to (default last 7 days of MAX(recorded_at)),
+            action ∈ ALLOWED_ACTIONS (comma-separated list ok),
+            page (default 1), page_size ∈ [1,100] (default 20).
+    Returns: {count, page, page_size, total_pages, results}.
+    Decisions whose machine was deleted keep machine_name = null.
     """
     try:
         from_dt = parse_iso_datetime(request.query_params.get("from"))
@@ -50,9 +34,6 @@ def decisions_list(request):
     except ValueError as e:
         return Response({"detail": f"Invalid datetime: {e}"}, status=400)
 
-    # `action` accepts a comma-separated list (e.g. ?action=turn_on,set_temp).
-    # A single value still works — it becomes a one-element list. Each
-    # value is validated against the allowlist; one bad token → 400.
     action_param = request.query_params.get("action") or None
     actions: list[str] | None = None
     if action_param:
@@ -61,7 +42,7 @@ def decisions_list(request):
             if a not in ALLOWED_ACTIONS:
                 return Response({"detail": f"Invalid action: {a!r}"}, status=400)
         if not actions:
-            actions = None  # ?action=,, → treat as no filter
+            actions = None  # ?action=,, → no filter
 
     try:
         page = int(request.query_params.get("page", 1))
@@ -83,21 +64,18 @@ def decisions_list(request):
             status=400,
         )
 
-    # Smart defaults — last 7 days of activity anchored to MAX(recorded_at).
-    if to_dt is None:
-        to_dt = get_max_recorded_at()
-        if to_dt is None:
-            return Response(
-                {
-                    "count": 0,
-                    "page": page,
-                    "page_size": page_size,
-                    "total_pages": 0,
-                    "results": [],
-                }
-            )
-    if from_dt is None:
-        from_dt = to_dt - timedelta(days=7)
+    window = resolve_window(from_dt, to_dt, default_hours=24 * 7)
+    if window is None:
+        return Response(
+            {
+                "count": 0,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": 0,
+                "results": [],
+            }
+        )
+    from_dt, to_dt = window
 
     offset = (page - 1) * page_size
 

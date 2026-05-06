@@ -1,4 +1,6 @@
 import os
+import sys
+import warnings
 from datetime import timedelta
 from pathlib import Path
 
@@ -6,14 +8,36 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY",
-    # 50-char placeholder so the HMAC HS256 key clears the 32-byte minimum
-    # without a warning. NEVER use this default in production.
-    "dev-only-change-me-thermalos-development-key-xxxx",
-)
+# 50-char placeholder clears HS256's 32-byte minimum. NEVER use in production.
+_DEV_SECRET_KEY = "dev-only-change-me-thermalos-development-key-xxxx"
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", _DEV_SECRET_KEY)
 DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
 ALLOWED_HOSTS = os.environ.get("ALLOWED_HOSTS", "*").split(",")
+
+# Refuse production-shaped startup with the dev secret; tests get a
+# softer warning instead of a hard exit.
+_running_tests = "pytest" in sys.modules or "test" in sys.argv
+if SECRET_KEY == _DEV_SECRET_KEY:
+    if not DEBUG and not _running_tests:
+        raise RuntimeError(
+            "DJANGO_SECRET_KEY is unset and DEBUG=False — refusing to start "
+            "with the development placeholder key. Set DJANGO_SECRET_KEY in "
+            "the environment."
+        )
+    warnings.warn(
+        "Using the development DJANGO_SECRET_KEY placeholder. "
+        "Set DJANGO_SECRET_KEY before deploying.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+
+if not DEBUG and ALLOWED_HOSTS == ["*"] and not _running_tests:
+    warnings.warn(
+        "ALLOWED_HOSTS='*' with DEBUG=False permits Host header spoofing. "
+        "Restrict ALLOWED_HOSTS to known domains for production.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -104,10 +128,7 @@ SIMPLE_JWT = {
     "USER_ID_CLAIM": "user_id",
 }
 
-# Frontend (Next.js) runs on http://localhost:3000 in dev. Production traffic
-# is proxied via Next.js's rewrite rule, so the browser never crosses origins
-# in normal use — CORS exists purely to support direct Django access during
-# development (curl, REST clients, alternate frontends).
+# CORS is dev-only — production traffic is proxied via Next.js rewrites.
 CORS_ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(

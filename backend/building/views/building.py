@@ -14,11 +14,12 @@ from building.utils import (
     dictfetchall,
     get_max_recorded_at,
     parse_iso_datetime,
+    resolve_window,
+    yesterday_kwh_or_none,
 )
 
 
-# Machine types whose temperature contributes to the building-wide
-# `avg_temperature` KPI. Fans don't have temperature readings.
+# Fans don't have temperature; only AC types feed the avg_temperature KPI.
 AC_MACHINE_TYPES = ("large_ac", "small_ac")
 
 
@@ -26,15 +27,11 @@ AC_MACHINE_TYPES = ("large_ac", "small_ac")
 def summary(request):
     """Live KPI snapshot of the whole building.
 
-    Reference time is `MAX(recorded_at)` across all readings — NOT
-    `datetime.now(UTC)`. This makes "today" the day of the most recent
-    sample, so the dashboard always shows fresh data whether the seed is
-    live or has been seeded forward in time.
+    Reference time is `MAX(recorded_at)`, not `now()`, so "today" tracks
+    the most recent sample regardless of seed clock drift.
 
-    Returns the eight-field object documented in DESIGN.md §1B. If the
-    database has no readings yet, returns the same shape with zeroed/null
-    counts so the frontend can render an empty dashboard rather than
-    crashing on a missing key.
+    Returns the 8-field object from DESIGN.md §1B; on an empty DB the
+    shape is preserved with zeroed/null values.
     """
     max_ts = get_max_recorded_at()
 
@@ -71,9 +68,9 @@ def summary(request):
         yesterday_kwh_raw = cursor.fetchone()[0]
 
     active = sum(1 for r in latest if r["status"] == "ON")
+    inactive = sum(1 for r in latest if r["status"] == "OFF")
     total_power = sum(r["power_kw"] for r in latest if r["status"] == "ON")
 
-    # Avg temp: only ON ACs with non-null temperature. Fans excluded entirely.
     ac_temps = [
         r["temperature"]
         for r in latest
@@ -83,19 +80,18 @@ def summary(request):
     ]
     avg_temp = (sum(ac_temps) / len(ac_temps)) if ac_temps else None
 
-    # Yesterday-relative trend; None when there's no yesterday data.
-    if yesterday_kwh_raw and yesterday_kwh_raw > 0:
-        yesterday_kwh = yesterday_kwh_raw
-        trend_pct = (today_kwh - yesterday_kwh) / yesterday_kwh * 100.0
-    else:
-        yesterday_kwh = None
-        trend_pct = None
+    yesterday_kwh = yesterday_kwh_or_none(yesterday_kwh_raw)
+    trend_pct = (
+        (today_kwh - yesterday_kwh) / yesterday_kwh * 100.0
+        if yesterday_kwh is not None
+        else None
+    )
 
     return Response(
         {
             "total_machines": total_machines,
             "active_machines": active,
-            "inactive_machines": total_machines - active,
+            "inactive_machines": inactive,
             "total_power_kw": round(total_power, 2),
             "today_kwh": round(today_kwh, 2),
             "yesterday_kwh": round(yesterday_kwh, 2) if yesterday_kwh is not None else None,
@@ -106,7 +102,6 @@ def summary(request):
 
 
 def _total_machines() -> int:
-    """Used only on the empty-DB path; cheap enough to inline twice."""
     with connection.cursor() as cursor:
         cursor.execute("SELECT COUNT(*) FROM building_machine")
         return cursor.fetchone()[0]
@@ -114,15 +109,11 @@ def _total_machines() -> int:
 
 @api_view(["GET"])
 def energy(request):
-    """Building-wide total power over a time range, time-bucketed.
+    """Building-wide total power, time-bucketed.
 
-    Query params (all optional):
-        from    ISO 8601 datetime  default = `to` − 24 hours
-        to      ISO 8601 datetime  default = MAX(recorded_at)
-        bucket  ∈ {15min, 1h}      default 1h
-
-    Returns:
-        [ {"bucket": "<iso>", "total_kw": <float>}, ... ]
+    Params: from, to (ISO; defaults: last 24h of MAX(recorded_at)),
+            bucket ∈ {15min, 1h} (default 1h).
+    Returns: [ {"bucket": <iso>, "total_kw": <float>}, ... ]
     """
     bucket_alias = request.query_params.get("bucket", "1h")
     if bucket_alias not in ALLOWED_BUCKETS_AGGREGATE:
@@ -135,13 +126,10 @@ def energy(request):
     except ValueError as e:
         return Response({"detail": f"Invalid datetime: {e}"}, status=400)
 
-    # Smart defaults — last 24 hours of available data.
-    if to_dt is None:
-        to_dt = get_max_recorded_at()
-        if to_dt is None:
-            return Response([])
-    if from_dt is None:
-        from_dt = to_dt - timedelta(hours=24)
+    window = resolve_window(from_dt, to_dt)
+    if window is None:
+        return Response([])
+    from_dt, to_dt = window
 
     sql_query = sql.TOTAL_ENERGY_TPL.format(bucket_interval=bucket_interval)
     with connection.cursor() as cursor:
@@ -160,20 +148,10 @@ def energy(request):
 def energy_by_zone(request):
     """Building power broken down by zone, pivoted for stacked area charts.
 
-    Query params (all optional):
-        from    ISO 8601 datetime  default = `to` − 24 hours
-        to      ISO 8601 datetime  default = MAX(recorded_at)
-        bucket  ∈ {15min, 1h}      default 1h
-
-    Returns:
-        [
-          { "bucket": "<iso>", "Zone A (Lobby & Ground)": 32.4, ... },
-          ...
-        ]
-
-    Every entry carries every known zone as a key. Zones with zero power
-    in a bucket are present with value 0.0 — keeps the stacked-area chart
-    series stable across the time axis.
+    Params: same as `energy`.
+    Returns one entry per bucket with every known zone as a key — zones
+    with zero power are present as 0.0 so the chart series stays stable
+    across the time axis.
     """
     bucket_alias = request.query_params.get("bucket", "1h")
     if bucket_alias not in ALLOWED_BUCKETS_AGGREGATE:
@@ -186,12 +164,10 @@ def energy_by_zone(request):
     except ValueError as e:
         return Response({"detail": f"Invalid datetime: {e}"}, status=400)
 
-    if to_dt is None:
-        to_dt = get_max_recorded_at()
-        if to_dt is None:
-            return Response([])
-    if from_dt is None:
-        from_dt = to_dt - timedelta(hours=24)
+    window = resolve_window(from_dt, to_dt)
+    if window is None:
+        return Response([])
+    from_dt, to_dt = window
 
     sql_query = sql.ZONE_ENERGY_TPL.format(bucket_interval=bucket_interval)
     with connection.cursor() as cursor:
@@ -201,13 +177,10 @@ def energy_by_zone(request):
         cursor.execute(sql.ALL_ZONES)
         all_zones = [r[0] for r in cursor.fetchall()]
 
-    # Pivot rows: bucket → {zone: total_kw}. defaultdict keeps the loop tight.
     pivoted: dict = defaultdict(dict)
     for bucket, zone, total_kw in rows:
         pivoted[bucket][zone] = round(total_kw, 2) if total_kw else 0.0
 
-    # Emit chronological list, filling zero for any zone missing from a bucket
-    # so each entry has a stable shape for the chart series.
     response = []
     for bucket in sorted(pivoted.keys()):
         entry = {"bucket": bucket.isoformat()}
