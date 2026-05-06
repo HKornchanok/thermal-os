@@ -17,12 +17,8 @@ from building.utils import (
 
 @api_view(["GET"])
 def list_machines(request):
-    """All machines with their most recent sensor reading nested as `latest_reading`.
-
-    A machine that has no readings yet (cold seed, or all readings deleted)
-    returns `latest_reading: null` — the frontend renders an empty card
-    rather than crashing on a missing key.
-    """
+    """All machines with their most recent reading nested as `latest_reading`.
+    Machines with no readings get `latest_reading: null`."""
     with connection.cursor() as cursor:
         cursor.execute(sql.LATEST_READING_PER_MACHINE)
         rows = dictfetchall(cursor)
@@ -56,18 +52,11 @@ def list_machines(request):
 def machine_sensors(request, machine_id: int):
     """Time-bucketed sensor readings for a single machine.
 
-    Query params (all optional):
-        metric  ∈ {power_kw, temperature, setpoint, speed_pct}  default power_kw
-        bucket  ∈ {5min, 15min, 1h, 1d}                          default 5min
-        from    ISO 8601 datetime                                default = `to` − 24 hours
-        to      ISO 8601 datetime                                default = MAX(recorded_at)
-
-    Returns:
-        [ {"bucket": "<iso>", "value": <float>}, ... ]
-
-    Errors:
-        400 invalid metric / bucket / datetime
-        404 machine not found
+    Params: metric ∈ ALLOWED_METRICS (default power_kw),
+            bucket ∈ ALLOWED_BUCKETS_FULL (default 5min),
+            from/to ISO datetimes (default: last 24h of MAX(recorded_at)).
+    Returns: [ {"bucket": <iso>, "value": <float>}, ... ].
+    400 invalid metric/bucket/datetime; 404 machine not found.
     """
     metric = request.query_params.get("metric", "power_kw")
     bucket_alias = request.query_params.get("bucket", "5min")
@@ -89,11 +78,8 @@ def machine_sensors(request, machine_id: int):
     except ValueError as e:
         return Response({"detail": f"Invalid datetime: {e}"}, status=400)
 
-    # Smart default — last 24 hours ending at this machine's latest reading.
-    # A sliding 24h window matches what an operations dashboard wants to
-    # show ("what happened in the last day") and matches the Energy page's
-    # default behaviour. A calendar-day window would clip to half a day on
-    # an operator opening the page right after midnight.
+    # Sliding 24h window vs calendar-day — operators want "last day", not
+    # a window that clips to half a day right after local midnight.
     window = resolve_window(from_dt, to_dt, machine_id=machine_id)
     if window is None:
         return Response([])

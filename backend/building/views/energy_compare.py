@@ -12,24 +12,10 @@ from building.utils import get_min_max_recorded_at, parse_iso_datetime
 def compare(request):
     """Average building power for two periods (A and B) plus savings_pct.
 
-    Query params (all optional — any subset can be supplied):
-        a_from, a_to    Period A (e.g. "before AI" / manual operations)
-        b_from, b_to    Period B (e.g. "after AI" / automated operations)
-
-    Smart defaults: when ANY of the four params is missing, fill remaining
-    ones from the seed boundaries — Period A = [MIN, midpoint),
-    Period B = [midpoint, MAX]. Caller can override any subset.
-
-    Returns:
-        {
-          "before": { "from": <iso>, "to": <iso>, "avg_kw": <float> },
-          "after":  { "from": <iso>, "to": <iso>, "avg_kw": <float> },
-          "savings_pct": <float>   // (before - after) / before × 100
-        }
-
-    Implementation: average of hourly totals (`SUM(power_kw)` bucketed at
-    1 hour) within each period. Avg-of-hourly-sums smooths over per-interval
-    noise and gives a stable comparison figure regardless of period length.
+    Params: a_from, a_to, b_from, b_to (any subset). Missing values fill
+    from seed boundaries: A = [MIN, midpoint), B = [midpoint, MAX].
+    Returns: {before:{from,to,avg_kw}, after:{from,to,avg_kw}, savings_pct}
+    where savings_pct = (before - after) / before × 100.
     """
     try:
         a_from = parse_iso_datetime(request.query_params.get("a_from"))
@@ -52,9 +38,8 @@ def compare(request):
 
     if a_from >= a_to or b_from >= b_to:
         return Response({"detail": "from must be earlier than to"}, status=400)
-    # The "before/after" naming carries chronological meaning — Period A
-    # has to start strictly before Period B starts. Without this guard a
-    # caller can swap the periods and the savings_pct sign flips silently.
+    # before/after carries chronological meaning — swapping periods would
+    # silently flip the savings_pct sign.
     if a_from >= b_from:
         return Response(
             {"detail": "Period A (before) must start before Period B (after)"},
@@ -67,13 +52,8 @@ def compare(request):
         cursor.execute(sql.COMPARE_AVG, [b_from, b_to])
         after_avg = cursor.fetchone()[0] or 0.0
 
-    if before_avg > 0:
-        savings_pct = (before_avg - after_avg) / before_avg * 100.0
-    else:
-        # Either no data in Period A, or it averages to 0. Either way,
-        # savings is undefined — return null so the frontend can render
-        # "—" instead of NaN.
-        savings_pct = None
+    # Period A empty/zero → savings undefined; return null so FE renders "—".
+    savings_pct = (before_avg - after_avg) / before_avg * 100.0 if before_avg > 0 else None
 
     return Response(
         {

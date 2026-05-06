@@ -44,23 +44,12 @@ from django.db import transaction
 from building.models import AIDecision, Machine, SensorReading
 
 
-# ---------------------------------------------------------------------------
-# Bangkok timezone — the building lives here, so all schedule hours
-# ("06:00 building opens", "22:00 night mode") are Bangkok local. Generate
-# timestamps in BANGKOK_TZ and let Django convert to UTC on save (USE_TZ=True
-# in settings). When the frontend renders via `new Date(iso).getHours()` in
-# the browser's local zone, a Bangkok viewer sees 06:00–22:00 and a remote
-# viewer sees the corresponding offset of the SAME building day.
-# ---------------------------------------------------------------------------
-
+# Schedule hours ("06:00 opens", "22:00 night mode") are Bangkok local.
+# Generate in BANGKOK_TZ; Django converts to UTC on save (USE_TZ=True).
 BANGKOK_TZ = timezone(timedelta(hours=7))
 
 
-# ---------------------------------------------------------------------------
-# Machine registry — names, zones, and rated powers from the brief's
-# "Machines" appendix table.
-# ---------------------------------------------------------------------------
-
+# Machine registry — names/zones/ratings from the brief's appendix.
 MACHINES: list[dict] = [
     {"name": "AC-L1",  "machine_type": "large_ac", "zone": "Zone A (Lobby & Ground)",  "rated_power_kw": 45.0, "is_critical": False},
     {"name": "AC-L2",  "machine_type": "large_ac", "zone": "Zone B (Floors 1-3)",      "rated_power_kw": 45.0, "is_critical": False},
@@ -87,17 +76,10 @@ class MachineCtx:
     is_critical: bool
 
 
-# ---------------------------------------------------------------------------
-# Schedule — when each machine is ON, by period.
-# Times are local-day hours in [0, 24) interpreted against the reading's
-# timestamp. The two periods diverge intentionally:
-#   Manual: every non-critical machine runs 06:00–22:00 flat (the "no AI" baseline)
-#   AI:     zone-aware schedule that mirrors the brief's daily-pattern table
-#           and the Decision Examples (e.g. AC-S3 off at 14:30 when rooms empty)
-# ---------------------------------------------------------------------------
+# Schedules — when each machine is ON. Manual = flat 06:00–22:00 baseline;
+# AI = zone-aware per the brief's daily-pattern table.
 
-# AI-period schedule: minute-of-day windows (start_min inclusive, end_min exclusive).
-# 06:00 = 360, 18:30 = 1110, 19:00 = 1140, 22:00 = 1320, etc.
+# Minute-of-day windows [start, end). 06:00=360, 18:30=1110, 22:00=1320.
 AI_SCHEDULE: dict[str, tuple[int, int]] = {
     "AC-L1":  (6 * 60,    23 * 60),         # Lobby: 06:00–23:00 (extended hours, night mode at 22:00 still ON)
     "AC-L2":  (6 * 60,    19 * 60),         # Floors 1–3: 06:00–19:00 (evening shutdown)
@@ -111,22 +93,13 @@ AI_SCHEDULE: dict[str, tuple[int, int]] = {
     "FAN-04": (6 * 60 + 15, 19 * 60),       # Floors 4–6: 06:15–19:00
 }
 
-# Manual-period flat window (06:00–22:00) for every non-critical machine.
 MANUAL_WINDOW = (6 * 60, 22 * 60)
 
 
-# ---------------------------------------------------------------------------
-# Day plans — per-AI-day variation. The brief calls for "~8–12 decisions per
-# day", but if every day uses the IDENTICAL 10 events at the IDENTICAL minute
-# with the IDENTICAL setpoint values, the AI looks like a cron job, not a
-# learning system. Real AI control varies its actions day to day in response
-# to weather and occupancy.
-#
-# A DayPlan is the single source of truth for one AI day: when AC-S3 turns
-# off, what setpoint AC-L1 drops to in the morning, etc. The plan is
-# consulted by BOTH the sensor reading generator AND the decision generator,
-# so the chart shows the change at the same minute the decision is logged.
-# ---------------------------------------------------------------------------
+# DayPlan = single source of truth for one AI day's setpoints/timings.
+# Both the reading generator AND the decision generator consult the same
+# plan, so the chart shows changes at the same minute the decision logs.
+# Without per-day variation the AI looks like a cron job, not a learner.
 
 
 @dataclass(frozen=True)
@@ -189,8 +162,7 @@ def _make_day_plan(rng: random.Random) -> DayPlan:
     )
 
 
-# Module-level cache, populated by Command.handle for the AI period.
-# Manual days never look this up; AI days look up by date().
+# Populated by Command.handle for the AI period; manual days don't read it.
 _DAY_PLANS: dict = {}
 
 
@@ -214,8 +186,7 @@ def _is_on(m: MachineCtx, dt: datetime, period: str) -> bool:
         return False
     start, end = sched
 
-    # Day-plan overrides — let each AI day shift its own off times so the
-    # schedule matches what the decision log says happened that day.
+    # Day-plan overrides — schedule matches what the decision log claims.
     plan = _plan_for(dt)
     if plan is not None:
         if m.name == "AC-S3":
@@ -228,11 +199,7 @@ def _is_on(m: MachineCtx, dt: datetime, period: str) -> bool:
     return start <= minute_of_day < end
 
 
-# ---------------------------------------------------------------------------
-# Outdoor temperature model — sinusoidal day cycle. Bangkok-ish: 24°C overnight
-# low at 06:00, 34°C peak at 14:00. AC load and indoor drift both ride this.
-# ---------------------------------------------------------------------------
-
+# Outdoor temp — sinusoidal day cycle, Bangkok-ish. AC load + indoor drift ride this.
 OUTDOOR_LOW_C = 24.0
 OUTDOOR_HIGH_C = 34.0
 
@@ -254,40 +221,28 @@ def _outdoor_temp(dt: datetime) -> float:
     return centre + amplitude * math.cos(phase)
 
 
-# ---------------------------------------------------------------------------
-# Reading generator — turns (machine, timestamp, period) into a SensorReading.
-# Power, temperature, setpoint, speed are all driven by the same outdoor-temp
-# signal so the dataset has internal consistency: a hot afternoon shows higher
-# AC load AND higher indoor drift, not random independent draws.
-# ---------------------------------------------------------------------------
+# Power, temperature, setpoint, and speed all ride the same outdoor-temp
+# signal so a hot afternoon shows higher AC load AND higher indoor drift.
 
 
 def _setpoint_for(m: MachineCtx, dt: datetime, period: str) -> float | None:
-    """AC setpoint at this time, given the period. Returns None for fans.
-
-    Day-plan aware in the AI period — each day's setpoint targets and
-    transition times come from `_plan_for(dt)`, so the chart shows the
-    same value the AIDecision row says was set.
-    """
+    """AC setpoint at this time. Returns None for fans. AI period reads
+    from _plan_for(dt) so the chart matches the AIDecision row values."""
     if m.machine_type == Machine.FAN:
         return None
 
     if period == "manual":
-        # Stuck at 25°C — the brief's "no setpoint adjustments during the day".
-        return 25.0
+        return 25.0  # Brief's "no setpoint adjustments during the day".
 
     if m.name == "AC-S5":
-        # Server Room — held cold 22°C all day, the natural target for hot kit.
-        return 22.0
+        return 22.0  # Server Room held cold 24/7.
 
     plan = _plan_for(dt)
     minute_of_day = dt.hour * 60 + dt.minute
 
     if m.name == "AC-L1":
-        # Lobby — sequence: 25°C overnight → drops at the day's morning_drop
-        # minute → relaxes at evening_relax → night mode at 22:00. When the
-        # day plan says "skip morning drop" (cool day), 25°C holds until the
-        # evening relax.
+        # Lobby: 25°C → morning drop → evening relax → 22:00 night mode.
+        # `skip_morning_drop` (cool day) holds 25°C until evening relax.
         if plan is not None:
             if minute_of_day >= 22 * 60:
                 return plan.ac_l1_night_setpoint
@@ -298,45 +253,34 @@ def _setpoint_for(m: MachineCtx, dt: datetime, period: str) -> float | None:
                 and minute_of_day >= plan.ac_l1_morning_drop_min
             ):
                 return plan.ac_l1_morning_setpoint
-            return 25.0
-        # No plan (shouldn't happen in AI period, defensive default).
         return 25.0
 
     if m.name in ("AC-L2", "AC-L3"):
-        # Floors 1–6 — sequence: 25°C → noon tighten → evening relax.
+        # Main floors: 25°C → noon tighten → evening relax.
         if plan is not None:
             if minute_of_day >= plan.ac_main_evening_min:
                 return plan.ac_main_evening_setpoint
             if minute_of_day >= plan.ac_main_noon_min:
                 return plan.ac_main_noon_setpoint
-            return 25.0
         return 25.0
 
-    # Small ACs in offices — held at 24°C through office hours.
-    return 24.0
+    return 24.0  # Small office ACs held flat.
 
 
 def _power_load_factor(
     m: MachineCtx, dt: datetime, period: str, rng: random.Random
 ) -> float:
-    """Fraction of rated power when ON, in [0.30, 0.80] for ACs / [0.40, 0.70] for fans.
-
-    Driven by outdoor heat: the hotter it is outside, the harder the AC works
-    to hold its setpoint. Manual period runs ~10 percentage points hotter than
-    AI for the same outdoor temp because manual setpoints are stuck at 25°C
-    where AI has already let the lobby drift to 26–27°C.
-    """
+    """Fraction of rated power when ON: ACs 30–80%, fans 40–70%.
+    Manual runs ~10pp hotter than AI for the same outdoor temp because
+    manual setpoints are stuck at 25°C while AI lets it drift to 26–27°C."""
     outdoor_norm = (_outdoor_temp(dt) - OUTDOOR_LOW_C) / (OUTDOOR_HIGH_C - OUTDOOR_LOW_C)
     outdoor_norm = max(0.0, min(1.0, outdoor_norm))
 
     if m.machine_type == Machine.FAN:
-        # Fans 40–70% — narrower band, less weather-driven (they move air
-        # regardless), small noise.
         base = 0.45 + 0.20 * outdoor_norm
         load = base + rng.gauss(0, 0.03)
         return max(0.40, min(0.70, load))
 
-    # AC: 30–80%. Manual sits ~78% of rated on a hot afternoon; AI sits ~65%.
     if period == "manual":
         base = 0.55 + 0.22 * outdoor_norm
     else:
@@ -360,17 +304,14 @@ def _gen_reading(
     setpoint = _setpoint_for(m, dt, period)
 
     if not on:
-        # OFF rows: power=0. ACs still report a slowly-drifting indoor temp
-        # because the room isn't actively cooled — useful for showing why a
-        # zone is "drifting from setpoint" overnight on the alert system.
-        # Fans report speed_pct=0.
+        # ACs report drifting indoor temp even when OFF (room warms toward
+        # outdoor) — feeds the temp_drift overnight alert narrative.
         if m.machine_type == Machine.FAN:
             return SensorReading(
                 machine_id=m.id, recorded_at=dt, power_kw=0.0,
                 temperature=None, setpoint=None, speed_pct=0.0,
                 status=SensorReading.OFF,
             )
-        # AC OFF: indoor drifts toward outdoor when not actively cooled.
         outdoor = _outdoor_temp(dt)
         drifted = (setpoint or 25.0) + (outdoor - 25.0) * 0.3 + rng.gauss(0, 0.5)
         return SensorReading(
@@ -383,9 +324,7 @@ def _gen_reading(
     power_kw = round(m.rated_power_kw * load, 3)
 
     if m.machine_type == Machine.FAN:
-        # Fan speed roughly tracks load factor (40–80% per brief Data Guide,
-        # which lines up with the 40–70% power band plus a small upward bias
-        # for VFD overhead at low load).
+        # Fan speed tracks load factor + small upward bias for VFD overhead.
         speed_pct = round(min(80.0, max(40.0, load * 100.0 + rng.gauss(0, 3))), 1)
         return SensorReading(
             machine_id=m.id, recorded_at=dt, power_kw=power_kw,
@@ -394,8 +333,7 @@ def _gen_reading(
         )
 
     indoor = (setpoint or 25.0) + _temp_drift(period, dt, rng)
-    # Clamp to the brief's 22–27°C indoor range; gauss noise can push outside.
-    indoor = max(22.0, min(27.0, indoor))
+    indoor = max(22.0, min(27.0, indoor))  # Brief's 22–27°C clamp.
     return SensorReading(
         machine_id=m.id, recorded_at=dt, power_kw=power_kw,
         temperature=round(indoor, 2), setpoint=setpoint,
@@ -403,28 +341,17 @@ def _gen_reading(
     )
 
 
-# ---------------------------------------------------------------------------
-# AI decision generator — ~10 events per AI day, mirroring the brief's
-# Decision Examples table. We synthesise one decision per machine that an
-# event references so the timeline reads naturally.
-# ---------------------------------------------------------------------------
-
-
 def _gen_day_decisions(
     machines: dict[str, MachineCtx],
     day_start: datetime,
     plan: DayPlan,
 ) -> list[AIDecision]:
-    """Build one AI day's decision log: 8–12 events whose times, setpoints,
-    and conditional skips/extras come from the day's `plan`. Every value
-    here is also what the sensor data reflects at the same minute — see
-    `_setpoint_for` and `_is_on` which read the SAME plan.
+    """One AI day's decision log (8–12 events). All times/setpoints/skips
+    come from the day's `plan` — `_setpoint_for` and `_is_on` read the
+    SAME plan so chart and decisions stay aligned.
 
-    Per-day variation:
-      - times jitter ±15-30 min from canonical
-      - setpoints jitter ±0.5°C
-      - hot day (peak >34.5°C) adds an extra 11:00 SET_TEMP tighten
-      - cool day (peak <32.8°C) skips the morning SET_TEMP entirely
+    Hot day (>34.5°C peak) adds an extra 11:00 SET_TEMP; cool day
+    (<32.8°C) skips the morning SET_TEMP.
     """
     out: list[AIDecision] = []
 
@@ -441,70 +368,42 @@ def _gen_day_decisions(
             value=value, reason=reason,
         ))
 
-    # 06:00 — Building opening, pre-cool. (AC-L2/L3 also turn on per their
-    # AI_SCHEDULE; we log the Zone A event as the canonical morning beat.)
     add(at_min(6 * 60), "AC-L1", AIDecision.TURN_ON, None,
         f"Building opening — pre-cool Zone A & Floors 1-6 (forecast peak {plan.outdoor_peak_c}°C)")
-
-    # 06:15 — Start ventilation across the building.
     add(at_min(6 * 60 + 15), "FAN-02", AIDecision.TURN_ON, None,
         "Start ventilation FAN-02..04 for occupancy")
-
-    # 07:00 — Office hours start; office floors come online together.
     add(at_min(7 * 60), "AC-S1", AIDecision.TURN_ON, None,
         "Office hours starting — AC-S1, AC-S2, AC-S4 online")
 
-    # Morning lobby setpoint drop — skipped on cooler days.
     if not plan.skip_morning_drop:
         morning_dt = at_min(plan.ac_l1_morning_drop_min)
         outdoor_now = round(_outdoor_temp(morning_dt), 1)
         add(morning_dt, "AC-L1", AIDecision.SET_TEMP, plan.ac_l1_morning_setpoint,
             f"Adjusted from 25°C to {plan.ac_l1_morning_setpoint}°C — outdoor temp rising to {outdoor_now}°C")
 
-    # Hot-day extra: AI tightens main floors at 11:00 ahead of peak.
     if plan.extra_morning_tighten:
         add(at_min(11 * 60), "AC-L2", AIDecision.SET_TEMP,
             round(plan.ac_main_noon_setpoint - 0.5, 1),
             f"Pre-tighten Floors 1-6 — hot day forecast ({plan.outdoor_peak_c}°C)")
 
-    # Noon — main floors tighten at the day's noon time.
     add(at_min(plan.ac_main_noon_min), "AC-L2", AIDecision.SET_TEMP, plan.ac_main_noon_setpoint,
         f"Adjusted Floors 1-6 to {plan.ac_main_noon_setpoint}°C — peak occupancy period")
-
-    # AC-S3 meeting rooms shut down (varies daily ±30 min).
     add(at_min(plan.ac_s3_off_min), "AC-S3", AIDecision.TURN_OFF, None,
         "Meeting rooms empty — no occupancy detected")
-
-    # Evening relax for the lobby (and main floors implicitly).
     add(at_min(plan.ac_l1_evening_relax_min), "AC-L1", AIDecision.SET_TEMP, plan.ac_l1_evening_setpoint,
         f"Relaxed lobby + Floors 1-6 to {plan.ac_l1_evening_setpoint}°C — occupancy dropping")
-
-    # Office floors close.
     add(at_min(plan.office_close_min), "AC-S1", AIDecision.TURN_OFF, None,
         "Office floors closing — AC-S1, AC-S2, AC-S4")
-
-    # Evening shutdown for main floors and ventilation.
     add(at_min(plan.main_evening_off_min), "AC-L2", AIDecision.TURN_OFF, None,
         "Evening shutdown — AC-L2, AC-L3, FAN-02..04")
-
-    # 22:00 — Lobby night mode (always at 22:00 sharp; only the target
-    # setpoint varies day-to-day).
     add(at_min(22 * 60), "AC-L1", AIDecision.SET_TEMP, plan.ac_l1_night_setpoint,
         f"Relaxed to {plan.ac_l1_night_setpoint}°C — lobby night mode")
 
     return out
 
 
-# ---------------------------------------------------------------------------
-# Engineered anomalies — guarantee the Smart Alerts banner has at least one
-# row of each rule (power_spike / temp_drift / nonstop_runtime) on first
-# load, so the bonus feature actually demos. Tuned to the exact numbers
-# the alert-rule tests check against.
-# ---------------------------------------------------------------------------
-
-
-# Specific values the test-suite asserts. Keep these in sync with
-# backend/building/tests/test_alerts.py if either changes.
+# Engineered anomalies — guarantee each alert rule fires on first load.
+# Values asserted by backend/building/tests/test_alerts.py — keep in sync.
 ENGINEERED_AC_L1_POWER_KW = 41.4   # 92% of 45 kW rated → power_spike (warning)
 ENGINEERED_AC_L1_STUCK_HOURS = 1   # how long the spike has been stuck
 ENGINEERED_AC_S2_TEMP_C = 27.1     # vs setpoint 24.0 → 3.1°C drift (warning)
@@ -518,23 +417,12 @@ def _apply_engineered_alerts(
     end: datetime,
     rng: random.Random,
 ) -> None:
-    """Mutate the trailing window of the seed so each alert rule fires.
+    """Mutate the trailing window so each alert rule fires from a coherent moment.
 
-    All three nudges target the SAME run-up to `end` so the alert banner
-    populates with realistic-looking values from a coherent moment in time
-    (rather than three distinct "this happened a week ago" anomalies).
-
-    1. AC-L1 power_spike — "stuck-on" pattern: the trailing hour is held
-       at 41.4 kW (92% of rated) instead of dropping to night-mode load
-       around 22:00. The chart shows AC-L1's power line flatlining high
-       from ~23:00 onward — a believable failure mode (control valve
-       stuck open) rather than a single anomalous spike at 23:55 that
-       a viewer would correctly question as implausible during night mode.
-    2. AC-S2 temp_drift — last reading shows temperature=27.1, setpoint=24.0.
-       Visible as a single "hot reading at the end" point on the chart.
-    3. AC-L3 nonstop_runtime — every reading in the trailing 19 hours is
-       forced ON with realistic load. Combined with a natural OFF earlier
-       in the day, the SQL rule sees a 19-hour ON streak.
+    1. AC-L1 power_spike: trailing hour held at 41.4 kW (92% of rated)
+       with cool over-cooled indoor temp — reads as "valve stuck open".
+    2. AC-S2 temp_drift: single hot reading at the end (27.1 vs setpoint 24).
+    3. AC-L3 nonstop_runtime: trailing 19h all ON for a 19-hour streak.
     """
     by_machine = {m.name: m.id for m in machines}
     last_dt = max(r.recorded_at for r in rows)
@@ -546,20 +434,13 @@ def _apply_engineered_alerts(
     ac_l3_id = by_machine.get("AC-L3")
 
     for r in rows:
-        # 1. AC-L1 stuck-high across the last hour. Power flatlines at the
-        #    spike value instead of decaying for night mode. Indoor temp
-        #    drifts cool (machine over-cooling because it can't ramp down)
-        #    so the narrative reads as "valve stuck open" not "natural
-        #    midday peak". Setpoint stays at night-mode 27°C — the contrast
-        #    between target and load is what makes the anomaly visible.
+        # 1. AC-L1 stuck-high across the last hour. Final slot is exactly
+        #    41.4 (alert test checks latest reading); others jitter so the
+        #    line doesn't look hardcoded.
         if (
             r.machine_id == ac_l1_id
             and stuck_window_start <= r.recorded_at <= last_dt
         ):
-            # Small jitter on the trailing slots so the line isn't a
-            # perfectly flat segment — feels like sampled hardware, not
-            # a hardcoded constant. Final slot is exactly 41.4 to satisfy
-            # the alert test which checks the latest reading's value.
             if r.recorded_at == last_dt:
                 r.power_kw = ENGINEERED_AC_L1_POWER_KW
             else:
@@ -567,38 +448,28 @@ def _apply_engineered_alerts(
                     ENGINEERED_AC_L1_POWER_KW + rng.gauss(0, 0.3), 2
                 )
             r.status = SensorReading.ON
-            # Over-cool: the stuck-on AC keeps cooling past the night
-            # setpoint. Indoor reads ~23°C against a 27°C target.
             if r.temperature is not None:
+                # Over-cool: 23°C indoor against 27°C night setpoint.
                 r.temperature = round(23.0 + rng.gauss(0, 0.3), 2)
 
-        # 2. AC-S2 temp drift at the very last slot.
+        # 2. AC-S2 temp drift at the final slot.
         if r.machine_id == ac_s2_id and r.recorded_at == last_dt:
             r.temperature = ENGINEERED_AC_S2_TEMP_C
             r.setpoint = ENGINEERED_AC_S2_SETPOINT_C
             r.status = SensorReading.ON
-            # Pick a power consistent with ON status — avoid 0 kW which
-            # would conflict with status=ON in the dashboard reading.
             if r.power_kw == 0.0:
-                r.power_kw = round(12.0 * 0.65, 3)  # ~mid load on a 12 kW unit
+                r.power_kw = round(12.0 * 0.65, 3)  # avoid 0 kW under ON
 
-        # 3. AC-L3 forced ON across the last 19 hours (no OFF in window).
+        # 3. AC-L3 forced ON across the trailing 19h.
         if (
             r.machine_id == ac_l3_id
             and nonstop_window_start <= r.recorded_at <= last_dt
             and r.status == SensorReading.OFF
         ):
             r.status = SensorReading.ON
-            # Mid-range load so the streak is plausible — not a bug.
             r.power_kw = round(45.0 * 0.55, 3)
-            # Hold a comfortable temp so this doesn't also trip temp_drift.
             r.setpoint = 25.0
             r.temperature = round(25.0 + rng.gauss(0.3, 0.4), 2)
-
-
-# ---------------------------------------------------------------------------
-# Command
-# ---------------------------------------------------------------------------
 
 
 class Command(BaseCommand):
@@ -616,8 +487,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         days: int = options["days"]
         do_clear: bool = options["clear"]
-        # Local RNG threaded through reading generation so re-runs are
-        # reproducible per `--seed N` without depending on global state.
         readings_rng = random.Random(options["seed"])
 
         if do_clear:
@@ -628,33 +497,20 @@ class Command(BaseCommand):
         self._ensure_admin()
         machines = self._upsert_machines()
 
-        # Anchor the seed window at the most recent midnight Bangkok time
-        # so chart days line up with how an operator on-site reads the
-        # clock. The brief's daily-pattern table ("06:00 building opens",
-        # "22:00 night mode") is Bangkok local time — without this anchor,
-        # a Bangkok viewer would see the building wake up at 13:00 and go
-        # to night mode at 05:00 because the schedule constants were
-        # being interpreted as UTC.
-        #
-        # Django stores DateTimeField as UTC (USE_TZ=True), so passing a
-        # tz-aware Bangkok datetime round-trips correctly: stored as UTC,
-        # serialised back as ISO with +00:00, then rendered in the
-        # viewer's local zone by `new Date(iso)` in the frontend.
+        # Anchor at the most recent Bangkok midnight so chart days line up
+        # with the on-site clock; Django stores as UTC and the FE renders
+        # back to local via `new Date(iso)`.
         end = datetime.now(BANGKOK_TZ).replace(
             hour=0, minute=0, second=0, microsecond=0
         ) + timedelta(days=1)
         start = end - timedelta(days=days)
 
-        # Brief's split: first 3 days manual, remainder AI control. For
-        # `days != 7` we hold the same 3-day manual lead-in so the comparison
-        # endpoint always has both sides populated.
+        # Always 3 manual days then AI, even for days != 7, so /compare/
+        # has both sides populated.
         manual_end = min(start + timedelta(days=3), end)
 
-        # Build per-day plans for the AI period. Each day gets its own
-        # RNG seeded by (global_seed, day_offset) so re-runs produce the
-        # same data. Plans are stored in the module-level _DAY_PLANS dict
-        # so reading + decision generators share a single source of
-        # truth without threading the parameter through every helper.
+        # Per-day plans share state with the decision generator via the
+        # module-level _DAY_PLANS dict (avoids threading through every helper).
         _DAY_PLANS.clear()
         ai_day = manual_end
         ai_day_index = 0
@@ -684,8 +540,6 @@ class Command(BaseCommand):
             f"{AIDecision.objects.count()} AI decisions across "
             f"{Machine.objects.count()} machines."
         ))
-
-    # -- helpers ---------------------------------------------------------
 
     def _ensure_admin(self) -> None:
         """admin/admin superuser for local sign-in. Idempotent."""
