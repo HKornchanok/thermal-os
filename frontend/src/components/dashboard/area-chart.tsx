@@ -130,7 +130,15 @@ export function AreaChart<TData extends Record<string, any>>({
       <ResponsiveContainer width="100%" height="100%">
         <RechartsAreaChart
           data={data}
-          margin={{ top: 8, right: 16, bottom: 0, left: -8 }}
+          // Top margin bumps to 24px when a `nowLine` is rendered so the
+          // top-anchored "now" label has room above the plot area instead
+          // of being clipped by the chart container's edge.
+          margin={{
+            top: nowLine !== undefined ? 24 : 8,
+            right: 16,
+            bottom: 0,
+            left: -8,
+          }}
           stackOffset={stacked ? "none" : undefined}
         >
           {useGradient && (
