@@ -3,15 +3,42 @@ import "@/styles/globals.css";
 import type { AppProps } from "next/app";
 import { useRouter } from "next/router";
 import { Inter, JetBrains_Mono } from "next/font/google";
-import { SessionProvider } from "next-auth/react";
+import { SessionProvider, useSession } from "next-auth/react";
 import { ThemeProvider } from "next-themes";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AuthGate } from "@/components/layout/AuthGate";
 import { Layout } from "@/components/layout/Layout";
 import { makeQueryClient } from "@/lib/query-client";
+
+/**
+ * Clears the React Query cache whenever the signed-in user identity
+ * changes — e.g. sign-out followed by sign-in as a different user
+ * without a hard reload. Without this, queryKeys (which don't include
+ * user identity) would resolve to the previous user's cached data for
+ * a beat before the next refetch lands. Quiet on token refresh, only
+ * fires on actual identity changes.
+ */
+function SessionCacheGuard() {
+  const { data: session } = useSession();
+  const queryClient = useQueryClient();
+  const lastUser = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const current = session?.user?.name ?? null;
+    if (lastUser.current === undefined) {
+      // First mount — record but don't clear (cache is empty anyway).
+      lastUser.current = current;
+      return;
+    }
+    if (lastUser.current !== current) {
+      queryClient.clear();
+      lastUser.current = current;
+    }
+  }, [session?.user?.name, queryClient]);
+  return null;
+}
 
 // next/font/google self-hosts the fonts at build time and exposes them as
 // CSS variables. Variable names match the theme's --font-sans / --font-mono.
@@ -47,6 +74,7 @@ export default function App({
   return (
     <SessionProvider session={session}>
       <QueryClientProvider client={queryClient}>
+        <SessionCacheGuard />
         <ThemeProvider
           attribute="class"
           // Dark by default — DESIGN.md positions this as a monitoring

@@ -32,13 +32,17 @@ export function KpiCard({
 }: KpiCardProps) {
   return (
     <div
+      data-testid={testId}
       className={cn(
         "rounded-lg border border-border bg-card p-3 text-card-foreground",
         className
       )}
     >
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 font-mono text-lg font-semibold" data-testid={testId}>
+      <p
+        className="mt-1 font-mono text-lg font-semibold"
+        data-testid={testId ? `${testId}-value` : undefined}
+      >
         {value}
       </p>
       {hint !== undefined && hint !== null && (

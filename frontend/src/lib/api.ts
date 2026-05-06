@@ -73,6 +73,33 @@ export async function apiFetch<T>(
   return (await response.json()) as T;
 }
 
+/**
+ * Build a query string from a flat params object. Skips `undefined` and
+ * `null` values; arrays serialise as comma-joined (matches the
+ * backend's `?action=turn_on,set_temp` convention). Returns the
+ * `?key=value&…` prefix or empty string when nothing was set.
+ *
+ * Replaces hand-rolled `URLSearchParams` blocks across `lib/hooks/use-*`
+ * with one well-tested utility — keeps the `?` prefix consistent and
+ * the encoding rules in one place.
+ */
+export function toSearchParams(
+  params: Record<string, string | number | string[] | undefined | null>
+): string {
+  const sp = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value)) {
+      if (value.length === 0) continue;
+      sp.set(key, value.join(","));
+    } else {
+      sp.set(key, String(value));
+    }
+  }
+  const s = sp.toString();
+  return s ? `?${s}` : "";
+}
+
 // =====================================================================
 // Response types — mirror the shapes documented in DESIGN.md §1B.
 // Keep these here as the single source of truth used by hooks and pages.

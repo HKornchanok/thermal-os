@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AreaChart } from "@/components/dashboard/area-chart";
 import { ErrorState, LoadingState } from "@/components/dashboard/states";
 import { MachineCard } from "@/components/dashboard/machine-card";
+import { QueryStateRenderer } from "@/components/dashboard/query-state";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatBucketLabel, formatBucketTime } from "@/lib/chart";
@@ -45,24 +46,18 @@ export default function MachinesPage() {
   const machinesQuery = useMachines();
   const machines = machinesQuery.data ?? [];
 
-  // Selection lives in the URL (`?selected=<id>`) so navigating from
-  // an alert banner deep-links straight into a machine.
-  const selectedFromQuery = useMemo(() => {
+  // Selection lives in the URL (`?selected=<id>`) so alerts can deep-link
+  // into a specific machine. Read directly from `router.query` rather than
+  // mirroring into `useState` — the previous mirror added a re-render gap
+  // where the two could briefly diverge, and forced an effect to sync them.
+  const selectedId = useMemo<number | null>(() => {
     const v = router.query.selected;
     const raw = Array.isArray(v) ? v[0] : v;
     const n = Number(raw);
     return raw && Number.isFinite(n) && n > 0 ? n : null;
   }, [router.query.selected]);
 
-  const [selectedId, setSelectedId] = useState<number | null>(
-    selectedFromQuery
-  );
-  useEffect(() => {
-    setSelectedId(selectedFromQuery);
-  }, [selectedFromQuery]);
-
   const select = (id: number) => {
-    setSelectedId(id);
     router.replace(
       { pathname: router.pathname, query: { ...router.query, selected: id } },
       undefined,
@@ -77,13 +72,19 @@ export default function MachinesPage() {
   // Default to the first metric available for the selected machine.
   const allowedMetrics = metricsForMachine(selectedMachine);
   const [metric, setMetric] = useState<MachineMetric>("power_kw");
+
+  // Reset metric whenever the selected machine type changes. Compute
+  // `nextAllowed` inside the effect from the live `selectedMachine` so we
+  // never read a stale `allowedMetrics` closure (e.g. if `machines` briefly
+  // empties during a refetch and `selectedMachine` becomes undefined and
+  // back, the closure would otherwise point at last-known data).
   useEffect(() => {
-    if (selectedMachine && !allowedMetrics.includes(metric)) {
-      setMetric(allowedMetrics[0] ?? "power_kw");
-    }
-    // We intentionally only reset on machine change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedMachine?.id]);
+    if (!selectedMachine) return;
+    const nextAllowed = metricsForMachine(selectedMachine);
+    setMetric((current) =>
+      nextAllowed.includes(current) ? current : (nextAllowed[0] ?? "power_kw")
+    );
+  }, [selectedMachine?.id, selectedMachine?.machine_type]);
 
   // "Last 24 hours from now" — the sliding window operators expect on a
   // live dashboard. If the browser clock is 06:00 today, the chart spans
@@ -127,16 +128,24 @@ export default function MachinesPage() {
   const nowBucketIso = useMemo(() => {
     if (sensorPoints.length === 0) return undefined;
     const now = Date.now();
-    let best = sensorPoints[0].bucket;
-    let bestDelta = Math.abs(new Date(best).getTime() - now);
+    // Filter to buckets at-or-before `now` first, then pick the closest.
+    // Without the `<= now` cap a bucket 2.5 min in the future could win
+    // (the chart's `to` is `now`, but buckets land on 5-min boundaries),
+    // which would draw the "now" line ahead of the actual latest data.
+    let best: string | undefined;
+    let bestDelta = Infinity;
     for (const p of sensorPoints) {
-      const delta = Math.abs(new Date(p.bucket).getTime() - now);
+      const ts = new Date(p.bucket).getTime();
+      if (ts > now) continue;
+      const delta = now - ts;
       if (delta < bestDelta) {
         best = p.bucket;
         bestDelta = delta;
       }
     }
-    return best;
+    // Fallback to the first bucket if every point is in the future
+    // (shouldn't happen in practice — defensive).
+    return best ?? sensorPoints[0].bucket;
   }, [sensorPoints]);
 
   return (
@@ -154,32 +163,29 @@ export default function MachinesPage() {
 
       {/* Grid */}
       <section className="mt-4">
-        {machinesQuery.isLoading ? (
-          <LoadingState message="Loading machines…" testId="machines-loading" />
-        ) : machinesQuery.isError ? (
-          <ErrorState
-            message={`Failed to load machines: ${
-              machinesQuery.error instanceof Error
-                ? machinesQuery.error.message
-                : "unknown error"
-            }`}
-            testId="machines-error"
-          />
-        ) : (
-          <div
-            data-testid="machines-grid"
-            className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4"
-          >
-            {machines.map((m) => (
-              <MachineCard
-                key={m.id}
-                machine={m}
-                selected={selectedId === m.id}
-                onClick={() => select(m.id)}
-              />
-            ))}
-          </div>
-        )}
+        <QueryStateRenderer
+          query={machinesQuery}
+          loadingMessage="Loading machines…"
+          errorPrefix="Failed to load machines"
+          loadingTestId="machines-loading"
+          errorTestId="machines-error"
+        >
+          {(machines) => (
+            <div
+              data-testid="machines-grid"
+              className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4"
+            >
+              {machines.map((m) => (
+                <MachineCard
+                  key={m.id}
+                  machine={m}
+                  selected={selectedId === m.id}
+                  onClick={() => select(m.id)}
+                />
+              ))}
+            </div>
+          )}
+        </QueryStateRenderer>
       </section>
 
       {/* Detail panel — only when a machine is selected */}

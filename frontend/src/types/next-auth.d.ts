@@ -4,7 +4,10 @@ import "next-auth/jwt";
 declare module "next-auth" {
   interface Session {
     accessToken?: string;
-    error?: "RefreshAccessTokenError" | string;
+    // Today the only error code we set is RefreshAccessTokenError. Keep
+    // the union strict so consumers get autocomplete + safety on the
+    // expected codes; widen here if more are added.
+    error?: "RefreshAccessTokenError";
   }
 
   interface User {
@@ -19,6 +22,6 @@ declare module "next-auth/jwt" {
     refreshToken?: string;
     accessTokenExpires?: number;
     username?: string | null;
-    error?: string;
+    error?: "RefreshAccessTokenError";
   }
 }

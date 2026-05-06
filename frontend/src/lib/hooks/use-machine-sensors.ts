@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 
-import { apiFetch, type SensorSeriesPoint } from "@/lib/api";
+import { apiFetch, toSearchParams, type SensorSeriesPoint } from "@/lib/api";
 
 export type MachineMetric =
   | "power_kw"
@@ -46,14 +46,12 @@ export function useMachineSensors({
   return useQuery<SensorSeriesPoint[]>({
     queryKey: ["machine-sensors", { machineId, metric, bucket, from, to }],
     queryFn: ({ signal }) => {
-      const sp = new URLSearchParams();
-      if (metric) sp.set("metric", metric);
-      if (bucket) sp.set("bucket", bucket);
-      if (from) sp.set("from", from);
-      if (to) sp.set("to", to);
-      const path = `/api/machines/${machineId}/sensors/${
-        sp.toString() ? `?${sp}` : ""
-      }`;
+      const path = `/api/machines/${machineId}/sensors/${toSearchParams({
+        metric,
+        bucket,
+        from,
+        to,
+      })}`;
       return apiFetch<SensorSeriesPoint[]>(path, { token, signal });
     },
     enabled: !!token && machineId > 0,

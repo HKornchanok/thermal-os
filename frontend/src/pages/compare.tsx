@@ -9,6 +9,12 @@ import { ErrorState, LoadingState } from "@/components/dashboard/states";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { Button } from "@/components/ui/button";
 import { colorForSeriesIndex } from "@/lib/chart";
+import {
+  inputDateToIso,
+  isoToLocalDate,
+  minDateStr,
+  shiftDay,
+} from "@/lib/dates";
 import { useBuildingEnergy } from "@/lib/hooks/use-building-energy";
 import { useEnergyCompare } from "@/lib/hooks/use-energy-compare";
 import { cn, fmtNum } from "@/lib/utils";
@@ -17,63 +23,28 @@ const SERIES_BEFORE = "Before AI";
 const SERIES_AFTER = "After AI";
 
 /**
- * Convert a "YYYY-MM-DD" local-date input value into the ISO 8601
- * timestamp the backend wants. Empty string → undefined so the hook
- * omits the param and the server falls back to its smart default.
- *
- * `endOfDay = true` adds 23:59:59 so a "to" boundary inclusively
- * covers the whole day.
- */
-function localDateToIso(date: string, endOfDay = false): string | undefined {
-  if (!date) return undefined;
-  const [y, m, d] = date.split("-").map(Number);
-  const dt = new Date(
-    y,
-    m - 1,
-    d,
-    endOfDay ? 23 : 0,
-    endOfDay ? 59 : 0,
-    endOfDay ? 59 : 0
-  );
-  return dt.toISOString();
-}
-
-function isoToLocalDate(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-/** Add `n` days to a YYYY-MM-DD string and return the same format. */
-function addDays(yyyyMmDd: string, n: number): string {
-  const [y, m, d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(y, m - 1, d + n);
-  const pad = (x: number) => String(x).padStart(2, "0");
-  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
-}
-
-/** Min of two YYYY-MM-DD strings (lexical order works for ISO dates). */
-function minDateStr(a: string, b: string): string {
-  return a < b ? a : b;
-}
-
-/**
  * Merge two time-aligned-by-index energy series into chart rows. Period
  * lengths can differ; rows pad the shorter side with `undefined` so the
  * line just stops rather than wrapping back. X axis is "hour offset
  * from each period's start", which lets the curves overlay despite
  * different absolute timestamps.
  */
+type CompareRow = {
+  offsetHours: number;
+  // Index signature instead of computed-key types — TypeScript treats
+  // `[SERIES_BEFORE]?: number` in a type body as a property whose key
+  // happens to be the literal "Before AI" only because the const is
+  // narrowly inferred. Switching to an explicit string-indexed shape
+  // makes the contract obvious to readers and to `noUncheckedIndexedAccess`.
+  [seriesName: string]: number | undefined;
+};
+
 function mergeAlignedByHour(
   before: { bucket: string; total_kw: number }[] | undefined,
   after: { bucket: string; total_kw: number }[] | undefined
-) {
+): CompareRow[] {
   const len = Math.max(before?.length ?? 0, after?.length ?? 0);
-  const rows: {
-    offsetHours: number;
-    [SERIES_BEFORE]?: number;
-    [SERIES_AFTER]?: number;
-  }[] = [];
+  const rows: CompareRow[] = [];
   for (let i = 0; i < len; i++) {
     rows.push({
       offsetHours: i,
@@ -92,12 +63,20 @@ export default function ComparePage() {
   const [bFrom, setBFrom] = useState("");
   const [bTo, setBTo] = useState("");
 
-  const compareQuery = useEnergyCompare({
-    a_from: localDateToIso(aFrom),
-    a_to: localDateToIso(aTo, true),
-    b_from: localDateToIso(bFrom),
-    b_to: localDateToIso(bTo, true),
-  });
+  // Memoise the params object so the underlying useQuery's `queryKey`
+  // identity only changes when an input changes — without this, a fresh
+  // object literal on every render forces TanStack to recompute / re-key
+  // the entry on each unrelated parent re-render.
+  const compareParams = useMemo(
+    () => ({
+      a_from: inputDateToIso(aFrom),
+      a_to: inputDateToIso(aTo, true),
+      b_from: inputDateToIso(bFrom),
+      b_to: inputDateToIso(bTo, true),
+    }),
+    [aFrom, aTo, bFrom, bTo]
+  );
+  const compareQuery = useEnergyCompare(compareParams);
   const compare = compareQuery.data;
 
   // Each period stays inside its half of the seed window — Period A
@@ -130,9 +109,9 @@ export default function ComparePage() {
     if (!periodARange || !periodBRange) return null;
     return {
       aFrom: periodARange.min,
-      aTo: minDateStr(addDays(periodARange.min, 2), periodARange.max),
+      aTo: minDateStr(shiftDay(periodARange.min, 2), periodARange.max),
       bFrom: periodBRange.min,
-      bTo: minDateStr(addDays(periodBRange.min, 2), periodBRange.max),
+      bTo: minDateStr(shiftDay(periodBRange.min, 2), periodBRange.max),
     };
   }, [periodARange, periodBRange]);
 
@@ -159,19 +138,34 @@ export default function ComparePage() {
     bTo === defaults.bTo;
 
   // Once compare resolves, fetch the per-period 1h timeseries so we can
-  // overlay them as lines. We use the server-resolved ISO boundaries
+  // overlay them as lines. Use the server-resolved ISO boundaries
   // (compare.before/after.from/to) rather than the raw inputs so the
   // chart matches the KPI numbers exactly even when defaults are in play.
-  const beforeQuery = useBuildingEnergy(
-    compare?.before
-      ? { from: compare.before.from, to: compare.before.to, bucket: "1h" }
-      : {}
+  // Both params memoised — same identity-stability concern as compareParams.
+  const beforeParams = useMemo(
+    () =>
+      compare?.before
+        ? {
+            from: compare.before.from,
+            to: compare.before.to,
+            bucket: "1h" as const,
+          }
+        : {},
+    [compare?.before]
   );
-  const afterQuery = useBuildingEnergy(
-    compare?.after
-      ? { from: compare.after.from, to: compare.after.to, bucket: "1h" }
-      : {}
+  const afterParams = useMemo(
+    () =>
+      compare?.after
+        ? {
+            from: compare.after.from,
+            to: compare.after.to,
+            bucket: "1h" as const,
+          }
+        : {},
+    [compare?.after]
   );
+  const beforeQuery = useBuildingEnergy(beforeParams);
+  const afterQuery = useBuildingEnergy(afterParams);
 
   const chartData = useMemo(
     () => mergeAlignedByHour(beforeQuery.data, afterQuery.data),
