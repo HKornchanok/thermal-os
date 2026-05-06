@@ -13,14 +13,9 @@ import { AuthGate } from "@/components/layout/AuthGate";
 import { Layout } from "@/components/layout/Layout";
 import { makeQueryClient } from "@/lib/query-client";
 
-/**
- * Clears the React Query cache whenever the signed-in user identity
- * changes — e.g. sign-out followed by sign-in as a different user
- * without a hard reload. Without this, queryKeys (which don't include
- * user identity) would resolve to the previous user's cached data for
- * a beat before the next refetch lands. Quiet on token refresh, only
- * fires on actual identity changes.
- */
+// Clears the query cache when the signed-in user identity changes,
+// preventing previous-user data flashing on sign-out → sign-in as a
+// different user. Quiet on token refresh.
 function SessionCacheGuard() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
@@ -28,7 +23,6 @@ function SessionCacheGuard() {
   useEffect(() => {
     const current = session?.user?.name ?? null;
     if (lastUser.current === undefined) {
-      // First mount — record but don't clear (cache is empty anyway).
       lastUser.current = current;
       return;
     }
@@ -40,8 +34,6 @@ function SessionCacheGuard() {
   return null;
 }
 
-// next/font/google self-hosts the fonts at build time and exposes them as
-// CSS variables. Variable names match the theme's --font-sans / --font-mono.
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
@@ -54,16 +46,13 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
-// Routes that opt out of the sidebar layout (centred designs of their own).
 const NO_LAYOUT_ROUTES = new Set<string>(["/login"]);
 
 export default function App({
   Component,
   pageProps: { session, ...pageProps },
 }: AppProps) {
-  // One QueryClient per browser tab. `useState` keeps it stable across
-  // re-renders without a module-level singleton (which would leak state
-  // across hot-reload boundaries and across tests using the same module).
+  // useState (not module-level) so HMR and tests get fresh clients.
   const [queryClient] = useState(() => makeQueryClient());
 
   const router = useRouter();
@@ -77,11 +66,6 @@ export default function App({
         <SessionCacheGuard />
         <ThemeProvider
           attribute="class"
-          // Dark by default — DESIGN.md positions this as a monitoring
-          // dashboard, the kind that lives on a control-room display
-          // overnight. enableSystem still lets users with an explicit
-          // system preference override on first visit, and any choice
-          // via <ThemeToggle> persists in localStorage.
           defaultTheme="dark"
           enableSystem
           disableTransitionOnChange

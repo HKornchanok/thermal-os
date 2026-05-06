@@ -11,18 +11,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-/**
- * Single button in the header that opens a menu with the signed-in user's
- * identity and a Sign-out action. Replaces the previous inline username +
- * separate Sign-out button so the header stays compact.
- */
 export function UserMenu() {
   const { data: session } = useSession();
   const name = session?.user?.name ?? null;
 
-  // Don't render anything if there's no session — the layout is only
-  // applied to authenticated routes, but a brief unauth state can occur
-  // during sign-out before the redirect lands on /login.
+  // Brief unauth state can occur mid sign-out → redirect.
   if (!name) return null;
 
   return (

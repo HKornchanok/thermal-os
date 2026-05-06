@@ -23,8 +23,7 @@ export default function DecisionsPage() {
   const [pageSize, setPageSize] = useState<number>(20);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-  // Wrap the setter so any filter change resets to page 1 — page 5 of a
-  // smaller filtered result would otherwise show an empty body.
+  // Reset to page 1 on any filter change.
   const handleColumnFiltersChange: OnChangeFn<ColumnFiltersState> = (
     updater
   ) => {
@@ -34,8 +33,6 @@ export default function DecisionsPage() {
     setPage(1);
   };
 
-  // Page-specific composition: the data-table package gives us per-column
-  // extractors, the page just maps column ids to API params.
   const apiParams = useMemo(
     () => ({
       ...extractDateRangeFromColumnFilters(columnFilters, "decided_at"),
@@ -59,8 +56,7 @@ export default function DecisionsPage() {
     state: { columnFilters },
     onColumnFiltersChange: handleColumnFiltersChange,
     getCoreRowModel: getCoreRowModel(),
-    // Pagination AND filtering are both server-side. TanStack just stores
-    // the values; useDecisions reads them and fires the request.
+    // Server-side filtering + pagination — TanStack just holds state.
     manualPagination: true,
     manualFiltering: true,
     pageCount: data?.total_pages ?? -1,

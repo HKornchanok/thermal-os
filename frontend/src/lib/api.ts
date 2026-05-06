@@ -1,14 +1,11 @@
 /**
- * Tiny fetch wrapper + shared API types.
- *
- * All endpoints live under /api/* and are proxied to Django by the Next.js
- * `rewrites().fallback` rule. NextAuth's /api/auth/* stays local. Every
- * call requires a Bearer access token from the session — pass it
- * explicitly so this helper stays usable from query-client contexts that
- * don't have access to React hooks.
+ * Tiny fetch wrapper + shared API types. All endpoints under /api/* go
+ * through the Next.js `rewrites().fallback` proxy to Django; the token
+ * is passed explicitly so this stays usable outside React (e.g. from
+ * queryFn).
  */
 
-const DEFAULT_BASE = ""; // same-origin, relies on Next.js rewrite proxy
+const DEFAULT_BASE = ""; // same-origin via Next.js rewrite proxy
 
 export class ApiError extends Error {
   constructor(
@@ -22,13 +19,11 @@ export class ApiError extends Error {
 }
 
 export type ApiFetchOptions = {
-  /** Bearer access token from the NextAuth session. */
   token?: string | null;
-  /** AbortSignal, typically the one TanStack Query passes via queryFn. */
   signal?: AbortSignal;
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
-  /** Optional override for the API base — e.g. an absolute URL in tests. */
+  /** Override for tests; defaults to same-origin. */
   baseUrl?: string;
 };
 
@@ -59,7 +54,7 @@ export async function apiFetch<T>(
     try {
       parsed = await response.json();
     } catch {
-      // Non-JSON error body — fall through with undefined.
+      /* non-JSON error body */
     }
     throw new ApiError(
       response.status,
@@ -68,20 +63,13 @@ export async function apiFetch<T>(
     );
   }
 
-  // 204 No Content has no JSON body; cast undefined to T for the caller.
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
 /**
- * Build a query string from a flat params object. Skips `undefined` and
- * `null` values; arrays serialise as comma-joined (matches the
- * backend's `?action=turn_on,set_temp` convention). Returns the
- * `?key=value&…` prefix or empty string when nothing was set.
- *
- * Replaces hand-rolled `URLSearchParams` blocks across `lib/hooks/use-*`
- * with one well-tested utility — keeps the `?` prefix consistent and
- * the encoding rules in one place.
+ * `?key=value&…` from a flat params object. Skips undefined/null;
+ * arrays serialise as comma-joined (`?action=turn_on,set_temp`).
  */
 export function toSearchParams(
   params: Record<string, string | number | string[] | undefined | null>
@@ -100,10 +88,7 @@ export function toSearchParams(
   return s ? `?${s}` : "";
 }
 
-// =====================================================================
-// Response types — mirror the shapes documented in DESIGN.md §1B.
-// Keep these here as the single source of truth used by hooks and pages.
-// =====================================================================
+// Response types — single source of truth for hooks + pages.
 
 export type MachineType = "large_ac" | "small_ac" | "fan";
 export type ReadingStatus = "ON" | "OFF";

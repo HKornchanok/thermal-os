@@ -4,10 +4,9 @@ import type { JWT } from "next-auth/jwt";
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://backend:8000";
 
-// Mirrors backend SIMPLE_JWT.ACCESS_TOKEN_LIFETIME (30 minutes).
+// Mirrors backend SIMPLE_JWT.ACCESS_TOKEN_LIFETIME.
 const ACCESS_TOKEN_LIFETIME_MS = 30 * 60 * 1000;
-// Refresh proactively this many ms before expiry to absorb clock skew /
-// in-flight requests.
+// Refresh this far ahead of expiry to cover clock skew + in-flight reqs.
 const REFRESH_BUFFER_MS = 60 * 1000;
 
 async function refreshAccessToken(token: JWT): Promise<JWT> {
@@ -67,24 +66,20 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user }) {
-      // Initial sign in — copy the tokens from authorize() onto the JWT.
       if (user) {
+        // Initial sign-in.
         token.accessToken = (user as { accessToken?: string }).accessToken;
         token.refreshToken = (user as { refreshToken?: string }).refreshToken;
         token.accessTokenExpires = Date.now() + ACCESS_TOKEN_LIFETIME_MS;
         token.username = user.name ?? null;
         return token;
       }
-
-      // Subsequent calls — return the stored token unless it's near expiry.
       if (
         typeof token.accessTokenExpires === "number" &&
         Date.now() < token.accessTokenExpires - REFRESH_BUFFER_MS
       ) {
         return token;
       }
-
-      // Access expired — try refresh.
       return refreshAccessToken(token);
     },
     async session({ session, token }) {

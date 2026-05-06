@@ -22,20 +22,10 @@ import { cn, fmtNum } from "@/lib/utils";
 const SERIES_BEFORE = "Before AI";
 const SERIES_AFTER = "After AI";
 
-/**
- * Merge two time-aligned-by-index energy series into chart rows. Period
- * lengths can differ; rows pad the shorter side with `undefined` so the
- * line just stops rather than wrapping back. X axis is "hour offset
- * from each period's start", which lets the curves overlay despite
- * different absolute timestamps.
- */
+// Periods can differ in length; the shorter series pads with undefined
+// so the line stops rather than wrapping back to row 0.
 type CompareRow = {
   offsetHours: number;
-  // Index signature instead of computed-key types — TypeScript treats
-  // `[SERIES_BEFORE]?: number` in a type body as a property whose key
-  // happens to be the literal "Before AI" only because the const is
-  // narrowly inferred. Switching to an explicit string-indexed shape
-  // makes the contract obvious to readers and to `noUncheckedIndexedAccess`.
   [seriesName: string]: number | undefined;
 };
 
@@ -56,17 +46,12 @@ function mergeAlignedByHour(
 }
 
 export default function ComparePage() {
-  // Local state — empty strings let the server pick smart defaults
-  // (split the seed window in half).
   const [aFrom, setAFrom] = useState("");
   const [aTo, setATo] = useState("");
   const [bFrom, setBFrom] = useState("");
   const [bTo, setBTo] = useState("");
 
-  // Memoise the params object so the underlying useQuery's `queryKey`
-  // identity only changes when an input changes — without this, a fresh
-  // object literal on every render forces TanStack to recompute / re-key
-  // the entry on each unrelated parent re-render.
+  // Memoised so the queryKey doesn't churn on every parent re-render.
   const compareParams = useMemo(
     () => ({
       a_from: inputDateToIso(aFrom),
@@ -79,11 +64,9 @@ export default function ComparePage() {
   const compareQuery = useEnergyCompare(compareParams);
   const compare = compareQuery.data;
 
-  // Each period stays inside its half of the seed window — Period A
-  // (Before AI) is bounded to the manual period, Period B (After AI)
-  // to the AI period. Without this, a user could pick a Period A date
-  // that lives inside the AI window (or vice-versa) and the comparison
-  // would silently stop being a manual-vs-AI comparison.
+  // Bound each picker to its own half of the seed window — without this,
+  // a Period A date inside the AI window would silently stop being a
+  // manual-vs-AI comparison.
   const periodARange = useMemo(() => {
     if (!compare?.before) return null;
     return {
@@ -99,12 +82,8 @@ export default function ComparePage() {
     };
   }, [compare]);
 
-  // Canonical default ranges — the brief frames the comparison as the
-  // first 3 days of manual against the first 3 days of AI. Equal-length
-  // windows make the savings_pct delta meaningful (comparing 3 days to
-  // 4 days would skew the average against the longer side). We pin the
-  // defaults to (range.min, range.min + 2 days), clamped to range.max
-  // so a shorter seed window doesn't over-extend.
+  // First 3 manual days vs first 3 AI days — equal-length windows so the
+  // savings_pct delta isn't skewed by period length.
   const defaults = useMemo(() => {
     if (!periodARange || !periodBRange) return null;
     return {
@@ -115,11 +94,8 @@ export default function ComparePage() {
     };
   }, [periodARange, periodBRange]);
 
-  // First-load: once the compare endpoint responds with its resolved
-  // boundaries, populate the inputs with the canonical defaults. We
-  // gate on `initialised` so the user's own picks aren't clobbered if
-  // the underlying compare response refreshes (e.g. seed re-runs while
-  // they're on the page).
+  // Populate the inputs with defaults once compare resolves. Gated on
+  // `initialised` so user picks survive a compare-refetch.
   const [initialised, setInitialised] = useState(false);
   useEffect(() => {
     if (initialised || !defaults) return;
@@ -137,11 +113,8 @@ export default function ComparePage() {
     bFrom === defaults.bFrom &&
     bTo === defaults.bTo;
 
-  // Once compare resolves, fetch the per-period 1h timeseries so we can
-  // overlay them as lines. Use the server-resolved ISO boundaries
-  // (compare.before/after.from/to) rather than the raw inputs so the
-  // chart matches the KPI numbers exactly even when defaults are in play.
-  // Both params memoised — same identity-stability concern as compareParams.
+  // Use server-resolved boundaries so the chart matches the KPI numbers
+  // exactly even when the inputs are still empty.
   const beforeParams = useMemo(
     () =>
       compare?.before
@@ -214,7 +187,6 @@ export default function ComparePage() {
         period start" axis so the curves line up regardless of absolute date.
       </p>
 
-      {/* Period pickers */}
       <section className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
         <PeriodPicker
           label="Period A — Before AI"
@@ -238,7 +210,6 @@ export default function ComparePage() {
         />
       </section>
 
-      {/* KPIs */}
       <section className="mt-4">
         {compareQuery.isLoading ? (
           <LoadingState
@@ -306,7 +277,6 @@ export default function ComparePage() {
         )}
       </section>
 
-      {/* Overlaid line chart */}
       {compare?.before && compare?.after && (
         <section
           className="mt-4 rounded-lg border border-border bg-card p-3 text-card-foreground"
@@ -334,10 +304,7 @@ export default function ComparePage() {
               data={chartData}
               xKey="offsetHours"
               series={[
-                // Before AI = yellow (manual era), After AI = green (AI era).
-                // Pinning explicitly so the colours track the narrative
-                // ("AI is the green one") regardless of where these series
-                // happen to sit in the default palette order.
+                // Yellow = manual era, green = AI era.
                 { key: SERIES_BEFORE, color: "var(--chart-2)" },
                 { key: SERIES_AFTER, color: "var(--chart-1)" },
               ]}
@@ -365,9 +332,7 @@ function PeriodPicker({
   label: string;
   from: string;
   to: string;
-  /** Earliest selectable date (this period's window start). */
   minDate?: string;
-  /** Latest selectable date (this period's window end). */
   maxDate?: string;
   onFromChange: (v: string) => void;
   onToChange: (v: string) => void;
@@ -411,16 +376,6 @@ function PeriodPicker({
   );
 }
 
-/**
- * Custom Recharts tooltip for /compare. Adds a "Diff" footer row that
- * shows the savings (or regression) between the Before AI and After AI
- * series at the hovered hour — the whole point of this page is the
- * delta, so making the user mentally subtract two numbers is bad UX.
- *
- * Returns null when the cursor isn't active or either series has no
- * value at this offset (the periods can have different lengths; one
- * line stops sooner than the other).
- */
 function CompareDiffTooltip({ active, payload, label }: ChartTooltipProps) {
   if (!active || !payload?.length) return null;
 
@@ -429,7 +384,6 @@ function CompareDiffTooltip({ active, payload, label }: ChartTooltipProps) {
   const before = typeof beforeRow?.value === "number" ? beforeRow.value : null;
   const after = typeof afterRow?.value === "number" ? afterRow.value : null;
 
-  // Header label — same translation as the page intro: "Day N, h+M".
   const hours = typeof label === "number" ? label : Number(label);
   const headerText = Number.isFinite(hours)
     ? hours >= 24
@@ -437,15 +391,11 @@ function CompareDiffTooltip({ active, payload, label }: ChartTooltipProps) {
       : `h+${hours}`
     : String(label);
 
-  // Diff is signed: AFTER − BEFORE. Negative ⇒ AI uses less ⇒ savings.
+  // After − Before: negative ⇒ AI saves ⇒ green text.
   const diff = before !== null && after !== null ? after - before : null;
   const pct =
     diff !== null && before && before > 0 ? (diff / before) * 100 : null;
 
-  // Match the existing Recharts tooltip's surface styling — it normally
-  // comes from CHART_TOOLTIP_CONTENT_STYLE on the wrapping <Tooltip>;
-  // since `content` overrides the default body, we re-create the surface
-  // here with Tailwind so light/dark theming + radius match.
   return (
     <div
       className="rounded border border-border bg-card px-2.5 py-2 font-mono text-xs text-foreground shadow-sm"

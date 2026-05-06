@@ -23,14 +23,9 @@ const ALL_METRICS: { value: MachineMetric; label: string }[] = [
   { value: "speed_pct", label: "Speed" },
 ];
 
-/** Which metrics make sense for which machine type. */
 function metricsForMachine(machine: Machine | undefined): MachineMetric[] {
   if (!machine) return ["power_kw"];
-  if (machine.machine_type === "fan") {
-    // Fans don't store temperature/setpoint — they have speed.
-    return ["power_kw", "speed_pct"];
-  }
-  // ACs (large + small): no speed_pct, but full thermal triplet.
+  if (machine.machine_type === "fan") return ["power_kw", "speed_pct"];
   return ["power_kw", "temperature", "setpoint"];
 }
 
@@ -46,10 +41,7 @@ export default function MachinesPage() {
   const machinesQuery = useMachines();
   const machines = machinesQuery.data ?? [];
 
-  // Selection lives in the URL (`?selected=<id>`) so alerts can deep-link
-  // into a specific machine. Read directly from `router.query` rather than
-  // mirroring into `useState` — the previous mirror added a re-render gap
-  // where the two could briefly diverge, and forced an effect to sync them.
+  // Selection lives in `?selected=<id>` so alerts can deep-link in.
   const selectedId = useMemo<number | null>(() => {
     const v = router.query.selected;
     const raw = Array.isArray(v) ? v[0] : v;
@@ -68,16 +60,11 @@ export default function MachinesPage() {
   const selectedMachine =
     selectedId != null ? machines.find((m) => m.id === selectedId) : undefined;
 
-  // Tabs state — which metric is currently displayed in the chart.
-  // Default to the first metric available for the selected machine.
   const allowedMetrics = metricsForMachine(selectedMachine);
   const [metric, setMetric] = useState<MachineMetric>("power_kw");
 
-  // Reset metric whenever the selected machine type changes. Compute
-  // `nextAllowed` inside the effect from the live `selectedMachine` so we
-  // never read a stale `allowedMetrics` closure (e.g. if `machines` briefly
-  // empties during a refetch and `selectedMachine` becomes undefined and
-  // back, the closure would otherwise point at last-known data).
+  // Reset metric on machine-type change. Compute inside the effect so
+  // we don't close over a stale `allowedMetrics`.
   useEffect(() => {
     if (!selectedMachine) return;
     const nextAllowed = metricsForMachine(selectedMachine);
@@ -86,11 +73,8 @@ export default function MachinesPage() {
     );
   }, [selectedMachine?.id, selectedMachine?.machine_type]);
 
-  // "Last 24 hours from now" — the sliding window operators expect on a
-  // live dashboard. If the browser clock is 06:00 today, the chart spans
-  // 06:00 yesterday → 06:00 today. Anchor on the SELECTED machine so the
-  // window is fresh whenever the user clicks into a different machine,
-  // but stable while they switch metric tabs (no chart flicker).
+  // Last 24h sliding from browser NOW; refreshes on machine change,
+  // stable across metric-tab switches.
   const { fromIso, toIso } = useMemo(() => {
     const now = Date.now();
     return {
@@ -108,8 +92,7 @@ export default function MachinesPage() {
   });
   const sensorPoints = sensorsQuery.data ?? [];
 
-  // 5-min buckets over 24h = ~288 ticks, which crowds the X axis.
-  // Thin to one tick per hour (the buckets that fall on :00).
+  // 288 5-min ticks crowd the X axis — keep only the on-the-hour ones.
   const hourlyTicks = useMemo(
     () =>
       sensorPoints
@@ -118,20 +101,13 @@ export default function MachinesPage() {
     [sensorPoints]
   );
 
-  // "Now" reference line position — snapped to the closest existing
-  // bucket. Recharts uses a categorical X axis when xKey holds string
-  // bucket labels, so ReferenceLine `x={...}` only positions correctly
-  // when the value EXACTLY matches a data point's bucket. Walking the
-  // points and picking the one nearest to wall-clock NOW gives a
-  // visually correct line at the latest 5-minute slot. Stable while
-  // switching metric tabs (depends only on sensorPoints + selectedId).
+  // Recharts uses a categorical X axis here, so ReferenceLine `x={...}`
+  // only positions correctly when the value matches a real bucket. Snap
+  // to the nearest bucket at-or-before NOW (a future bucket would draw
+  // the line ahead of the actual data).
   const nowBucketIso = useMemo(() => {
     if (sensorPoints.length === 0) return undefined;
     const now = Date.now();
-    // Filter to buckets at-or-before `now` first, then pick the closest.
-    // Without the `<= now` cap a bucket 2.5 min in the future could win
-    // (the chart's `to` is `now`, but buckets land on 5-min boundaries),
-    // which would draw the "now" line ahead of the actual latest data.
     let best: string | undefined;
     let bestDelta = Infinity;
     for (const p of sensorPoints) {
@@ -143,8 +119,6 @@ export default function MachinesPage() {
         bestDelta = delta;
       }
     }
-    // Fallback to the first bucket if every point is in the future
-    // (shouldn't happen in practice — defensive).
     return best ?? sensorPoints[0].bucket;
   }, [sensorPoints]);
 
@@ -161,7 +135,6 @@ export default function MachinesPage() {
         </p>
       </div>
 
-      {/* Grid */}
       <section className="mt-4">
         <QueryStateRenderer
           query={machinesQuery}
@@ -188,7 +161,6 @@ export default function MachinesPage() {
         </QueryStateRenderer>
       </section>
 
-      {/* Detail panel — only when a machine is selected */}
       {selectedMachine && (
         <section
           className="mt-6 rounded-lg border border-border bg-card p-4 text-card-foreground"

@@ -1,34 +1,23 @@
 /**
- * Shared Recharts theming.
- *
- * Every chart in the dashboard pulls axis, tooltip, and grid styling
- * from these constants so the look is consistent and CSS-variable
- * driven — light/dark mode flip without per-chart code.
- *
- * Recharts components accept colour strings, so passing `var(--token)`
- * directly works: the browser resolves the variable wherever the SVG
- * style lands. Using `hsl(var(...))` would NOT work here — our theme
- * uses OKLCH (see globals.css), and the values can't be re-wrapped.
+ * Shared Recharts theming. Recharts accepts colour strings, so passing
+ * `var(--token)` directly works — the browser resolves it on the SVG.
+ * `hsl(var(...))` does NOT work because the theme is OKLCH.
  */
 
 import type { CSSProperties, SVGProps } from "react";
 
-// Recharts' XAxis/YAxis `tick` prop receives SVG text props, not React
-// CSSProperties — the two overlap nominally but diverge on enums like
-// `alignmentBaseline`. Typing the constant as SVGProps<SVGTextElement>
-// matches the consumer signature exactly.
+// Recharts' tick prop wants SVG text props, not CSSProperties — the two
+// diverge on enums like `alignmentBaseline`.
 export const CHART_AXIS_STYLE: SVGProps<SVGTextElement> = {
   fill: "var(--muted-foreground)",
   fontSize: 10,
   fontFamily: "var(--font-mono)",
 };
 
-/** Style applied to <Tooltip wrapperStyle={...}>; the floating box itself. */
 export const CHART_TOOLTIP_WRAPPER_STYLE: CSSProperties = {
   outline: "none",
 };
 
-/** Style applied to <Tooltip contentStyle={...}>; the box's surface. */
 export const CHART_TOOLTIP_CONTENT_STYLE: CSSProperties = {
   background: "var(--card)",
   border: "1px solid var(--border)",
@@ -36,7 +25,6 @@ export const CHART_TOOLTIP_CONTENT_STYLE: CSSProperties = {
   fontSize: 12,
   fontFamily: "var(--font-mono)",
   color: "var(--foreground)",
-  // Recharts injects an empty wrapper above; tighten its padding.
   padding: "8px 10px",
 };
 
@@ -50,10 +38,8 @@ export const CHART_TOOLTIP_ITEM_STYLE: CSSProperties = {
   color: "var(--foreground)",
 };
 
-/** Stroke colour for <CartesianGrid>. */
 export const CHART_GRID_STROKE = "var(--border)";
 
-/** First five chart series colours from the theme palette. */
 export const CHART_SERIES_COLORS = [
   "var(--chart-1)",
   "var(--chart-2)",
@@ -63,21 +49,8 @@ export const CHART_SERIES_COLORS = [
 ] as const;
 
 /**
- * Pick a chart-series colour by index, expanding the base 5-colour
- * palette via CSS `color-mix` so charts with more than 5 series (zone
- * breakdown is 12) don't repeat hues.
- *
- *   index 0–4   → base chart-1..5
- *   index 5–9   → 70% base + 30% foreground (darker variant)
- *   index 10–14 → 70% base + 30% background (lighter variant)
- *   index 15–19 → 50% base + 50% foreground (deep variant)
- *   index 20–24 → 50% base + 50% background (pale variant)
- *   index 25+   → cycle from index 0 (extremely unlikely — would mean
- *                 25+ distinct series on a single chart)
- *
- * `color-mix(in oklch, ...)` is supported in modern Chrome/Safari/
- * Firefox. The theme's variables are OKLCH so mixing stays in the same
- * colour space — no perceptual jumps.
+ * Expands the 5-colour palette to 25 unique hues via `color-mix(in oklch)`.
+ * Variants: base / +foreground / +background / deep+foreground / pale+background.
  */
 export function colorForSeriesIndex(i: number): string {
   const base = CHART_SERIES_COLORS[i % CHART_SERIES_COLORS.length];
@@ -98,22 +71,14 @@ export function colorForSeriesIndex(i: number): string {
   }
 }
 
-/**
- * Format an ISO 8601 bucket string for X-axis ticks. Always renders as
- * 24-hour HH:MM in the user's local time so dashboards read consistently
- * regardless of locale.
- */
+/** ISO bucket → "HH:MM" in browser local time. */
 export function formatBucketTime(iso: string): string {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-/**
- * Format an ISO 8601 bucket string for tooltip labels. Includes day +
- * 24-hour clock so the tooltip is unambiguous at the daily-boundary
- * rendering of the area chart.
- */
+/** ISO bucket → "May 07, 14:00" tooltip label. */
 export function formatBucketLabel(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString(undefined, {

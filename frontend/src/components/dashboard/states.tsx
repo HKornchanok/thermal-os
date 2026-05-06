@@ -3,21 +3,9 @@ import { CircleAlert, Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-/**
- * Shared status panels per DESIGN.md §1C.
- *
- *   <LoadingState />  spinner + message,   role="status"  for assistive tech
- *   <ErrorState />    destructive icon,    role="alert"
- *
- * Both stretch to fill the parent and centre their content. Pages drop
- * them straight into a card body — the parent owns the box; these own
- * the message.
- */
-
 interface BaseProps {
   message?: ReactNode;
   className?: string;
-  /** Test hook — page-specific value such as "decisions-loading". */
   testId?: string;
 }
 

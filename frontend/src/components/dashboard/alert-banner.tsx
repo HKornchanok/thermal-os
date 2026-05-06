@@ -3,23 +3,9 @@ import { AlertTriangle, CircleAlert } from "lucide-react";
 import type { Alert } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-/**
- * Stack of alert rows shown above the KPIs on the Overview page.
- *
- * Each row is clickable when `onSelect` is supplied — clicking jumps
- * the user to /machines?selected=<id> so they can inspect the offending
- * machine's chart immediately.
- *
- * Severity styling:
- *   critical → destructive border + tinted background, AlertTriangle
- *   warning  → default border + muted background, CircleAlert
- *
- * Both severities share the same row layout so the banner stays
- * compact and scans top-to-bottom in one glance.
- */
 export interface AlertBannerProps {
   alerts: Alert[];
-  /** Optional click handler — receives the alert's machine_id. */
+  /** Click handler receives the alert's machine_id. */
   onSelect?: (machineId: number) => void;
   className?: string;
 }
@@ -87,8 +73,7 @@ function AlertRow({
           >
             {alert.severity}
           </span>
-          {/* Explicit space so screen readers and the button's accessible
-              name read "critical AC-L3 ..." rather than "criticalAC-L3 ...". */}{" "}
+          {/* Space for screen readers — `mr-2` is visual only. */}{" "}
           <span className="font-mono font-semibold">{alert.machine_name}</span>
           <span className="text-muted-foreground"> · </span>
           <span>{alert.message}</span>

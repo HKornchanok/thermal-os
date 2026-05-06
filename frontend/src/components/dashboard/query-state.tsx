@@ -3,24 +3,8 @@ import type { ReactNode } from "react";
 import { ErrorState, LoadingState } from "@/components/dashboard/states";
 
 /**
- * Standard `loading → error → render` pattern for a single TanStack
- * Query. Replaces ~8 copies of:
- *
- *     {q.isLoading ? <LoadingState /> :
- *      q.isError   ? <ErrorState message={`Failed: ${q.error...}`}/> :
- *      <Body data={q.data}/>}
- *
- * spread across the pages, each with hand-typed loading/error
- * messages and minor variations in test-id names.
- *
- * The render prop receives the resolved `data` (non-null/undefined
- * narrowed) so callers don't need to re-check after the loading +
- * error branches.
- *
- * Pages that need a different empty-state shape (e.g. "no data for
- * this metric") can compose this with their own conditional inside
- * the render prop — that case is page-specific copy, not a shared
- * pattern.
+ * Standard loading → error → render pattern for a TanStack Query.
+ * Pages with custom empty states should branch inside `children`.
  */
 export interface QueryLike<T> {
   isLoading: boolean;
@@ -56,12 +40,6 @@ export function QueryStateRenderer<T>({
       <ErrorState message={`${errorPrefix}: ${detail}`} testId={errorTestId} />
     );
   }
-  if (query.data === undefined) {
-    // Resolved-but-no-data: render nothing. Callers that want an
-    // explicit empty state should handle it inside `children` since
-    // "what counts as empty" varies (zero rows vs missing keys vs all
-    // zero values).
-    return null;
-  }
+  if (query.data === undefined) return null;
   return <>{children(query.data)}</>;
 }

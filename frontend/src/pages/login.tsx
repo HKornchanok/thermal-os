@@ -31,9 +31,7 @@ export default function Login() {
       return;
     }
     if (res?.ok) {
-      // Bounce to the originally-requested URL the AuthGate captured,
-      // falling back to the Overview page when the user came straight
-      // to /login.
+      // Bounce back to AuthGate's captured URL, or `/` if absent.
       const callback = router.query.callbackUrl;
       const target =
         typeof callback === "string" && callback.startsWith("/")

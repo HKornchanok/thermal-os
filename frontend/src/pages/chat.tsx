@@ -26,10 +26,8 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const chat = useChat();
 
-  // Auto-scroll the transcript to the bottom as new messages land.
-  // Depend only on `messages` — including `chat.isPending` here would
-  // re-fire smooth-scroll on every pending toggle, fighting any user
-  // scroll-up during the "Thinking…" phase.
+  // Excluding `chat.isPending` from the deps so user scroll-up during
+  // the Thinking… phase isn't fought by a re-fired smooth-scroll.
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -68,8 +66,7 @@ export default function ChatPage() {
     void send(input);
   };
 
-  // Cmd/Ctrl+Enter submits — same shortcut every chat UI uses.
-  // Plain Enter inserts a newline so longer questions don't get cut off.
+  // ⌘/Ctrl+Enter submits; plain Enter inserts a newline.
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
@@ -93,7 +90,6 @@ export default function ChatPage() {
           </p>
         </div>
 
-        {/* Transcript */}
         <div
           ref={scrollRef}
           data-testid="chat-transcript"
@@ -117,7 +113,6 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* Composer */}
         <form
           onSubmit={onSubmit}
           className="mt-3 flex items-end gap-2"
@@ -209,11 +204,8 @@ function MessageBubble({
       <div
         className={cn(
           "max-w-[85%] rounded-lg border px-3 py-2 text-sm",
-          // User messages stay plain text (no markdown parsing) so a
-          // typed `**` or `_` shows literally — operators don't expect
-          // their own input to be reformatted. Assistant messages render
-          // as markdown so Sonnet's bold / lists / tables / code come
-          // through correctly.
+          // User messages stay plain so a typed `**` shows literally;
+          // assistant messages parse markdown.
           isUser
             ? "border-primary/40 bg-primary/10 whitespace-pre-wrap text-foreground"
             : "bg-muted/40 border-border text-foreground"

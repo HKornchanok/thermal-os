@@ -10,43 +10,25 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * Per-column filter trigger + input.
- *
- * Each filterable column declares a `meta.filterVariant` (plus
- * `meta.filterOptions` for "select"). This component renders a
- * funnel-icon button next to the column label; clicking it opens a
- * popover holding the matching input. Reads/writes filter state via
- * the standard TanStack column API (`column.getFilterValue` /
- * `column.setFilterValue`).
- *
- * Pattern follows the official guide:
- *   https://tanstack.com/table/v8/docs/guide/column-filtering
- *
- * Adding a new variant: extend the declare-module block + add a branch
- * in <FilterInput />. Columns just declare `meta`; they never own the
- * input markup or the trigger UI.
+ * Funnel-icon button + popover that owns one column's filter input.
+ * Columns declare `meta.filterVariant`; this component renders the
+ * matching <FilterInput /> and reads/writes via column.getFilterValue.
+ * Adding a variant: extend the declare-module block + add a branch.
  */
 
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData extends RowData, TValue> {
-    /** Which input renders inside the popover for this column. */
     filterVariant?: "select" | "multiselect" | "date";
-    /** Required for variant="select" / "multiselect". Empty selection = no filter. */
+    /** Required for select/multiselect; empty selection means no filter. */
     filterOptions?: { value: string; label: string }[];
-    /** Optional human label used in the popover heading + aria. */
+    /** Heading + aria label inside the popover. */
     filterLabel?: string;
   }
 }
 
-// ---------------------------------------------------------------------
-// Date filter shape — discriminated union by operator.
-//
-// `value` for "on" is a date-only YYYY-MM-DD (treated as a whole day).
-// `from`/`to`/`value` for the other operators is a datetime-local
-// string in the user's local time zone (`YYYY-MM-DDTHH:MM`). The page
-// converts these to ISO 8601 UTC when sending to the backend.
-// ---------------------------------------------------------------------
+// `value` for "on" is YYYY-MM-DD (whole day); other operators use
+// datetime-local "YYYY-MM-DDTHH:MM" in the browser's zone.
 
 export type DateFilterOp =
   | "between"
@@ -82,10 +64,6 @@ function isDateFilterActive(v: DateFilterValue | undefined): boolean {
   return !!v.value;
 }
 
-// ---------------------------------------------------------------------
-// Generic active-filter detection used for the trigger-button indicator.
-// ---------------------------------------------------------------------
-
 function isFilterActive(value: unknown): boolean {
   if (value === undefined || value === null || value === "") return false;
   if (Array.isArray(value)) return value.length > 0;
@@ -96,10 +74,6 @@ function isFilterActive(value: unknown): boolean {
   }
   return true;
 }
-
-// ---------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------
 
 const INPUT_CLASS =
   "rounded border border-input bg-background px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring";
@@ -206,15 +180,11 @@ function FilterInput<TData>({
   }
 
   if (variant === "date") {
-    // Start with empty fields. Operator defaults to "between" only so the
-    // dropdown has a selected option; the from/to inputs themselves are
-    // blank until the user picks a date.
     const current =
       (column.getFilterValue() as DateFilterValue | undefined) ??
       ({ op: "between" } as DateFilterValue);
 
-    // Switching the operator clears any value-side state so we don't
-    // carry a stale `from`/`to` into a single-date op (or vice versa).
+    // Clear value-side state on op change to avoid stale from/to leakage.
     const setOp = (op: DateFilterOp) => {
       column.setFilterValue({ op } as DateFilterValue);
     };
@@ -303,8 +273,7 @@ function MultiSelectFilter<TData>({
   column: Column<TData, unknown>;
 }) {
   const options = column.columnDef.meta?.filterOptions ?? [];
-  // The stored value is an array of selected option `value`s. Empty / undefined
-  // means "no filter" (show all rows).
+  // Empty / undefined means "no filter".
   const selected = (column.getFilterValue() as string[] | undefined) ?? [];
   const selectedSet = new Set(selected);
 
@@ -329,9 +298,7 @@ function MultiSelectFilter<TData>({
         <input
           type="checkbox"
           checked={allChecked}
-          // Indeterminate state: some but not all checked. The visual
-          // partial-tick reflects the mixed selection without forcing
-          // either "select all" or "clear all" on render.
+          // Tri-state checkbox — indeterminate when partially selected.
           ref={(el) => {
             if (el) el.indeterminate = someChecked;
           }}
