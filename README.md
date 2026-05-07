@@ -86,15 +86,45 @@ paths use raw SQL via `connection.cursor()` per the spec.
 - **Tooling** — ruff, pytest-django, Prettier + Husky pre-commit,
   GitHub Actions CI
 
-## Verification
+## Common commands
+
+All run from the repo root unless noted.
 
 ```sh
-docker compose exec backend pytest -q       # 125 passed
-cd frontend && npm run typecheck && npm run build
+# stack
+docker compose up                                # bring everything up
+docker compose down                              # stop, keep DB volume
+docker compose down -v                           # stop + wipe DB (need re-seed after)
+docker compose logs -f backend                   # tail backend logs
+docker compose restart backend                   # restart one service
+
+# database
+docker compose exec backend python manage.py seed --clear      # reset + reseed (creates admin/admin)
+docker compose exec backend python manage.py migrate           # apply migrations only
+docker compose exec backend python manage.py createsuperuser   # add another admin user
+docker compose exec backend python manage.py shell             # Django REPL
+docker compose exec db psql -U thermalos thermalos             # raw psql
+
+# backend
+docker compose exec backend pytest -q                          # 125 tests
+docker compose exec backend pytest -k test_alerts -v           # one file
+docker compose exec backend ruff check .                       # lint
+docker compose exec backend ruff check . --fix                 # auto-fix
+docker compose exec backend python manage.py makemigrations    # after model changes
+
+# frontend (from frontend/, or via docker compose exec)
+npm run dev                                      # local dev (already runs in container)
+npm run build                                    # prod build
+npm run typecheck                                # tsc --noEmit
+npm run format                                   # prettier --write
+npm run format:check                             # CI parity check
 ```
 
-CI runs both on every PR. Prettier auto-formats staged frontend files
-on commit (Husky + lint-staged).
+CI runs ruff + pytest + prettier + typecheck + build on every PR.
+Prettier auto-formats staged frontend files on commit via Husky.
+
+**If login fails after a `down -v`**: re-run `seed --clear` —
+migrations don't recreate the `admin/admin` superuser, only seed does.
 
 ## Production deploy
 
