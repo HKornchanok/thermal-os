@@ -1,9 +1,9 @@
 # ThermalOS
 
-[![CI](https://github.com/HKornchanok/alto-tech/actions/workflows/ci.yml/badge.svg)](https://github.com/HKornchanok/alto-tech/actions/workflows/ci.yml)
+![CI](../../actions/workflows/ci.yml/badge.svg)
 
-Building energy monitoring dashboard for the AltoTech full-stack
-assessment. Tracks 12 HVAC machines across 6 zones with live KPIs,
+Building energy monitoring dashboard for a full-stack engineering
+take-home. Tracks 12 HVAC machines across 6 zones with live KPIs,
 time-series charts, an AI decision audit trail, before/after energy
 comparison, derived alerts, and an Anthropic-grounded chat assistant.
 
@@ -136,7 +136,7 @@ Headlines below; full reasoning in
   TanStack Query's `refetchInterval`; would need `"use client"` everywhere
 - **Server-side pivot for by-zone** — Python `defaultdict` keyed by
   bucket; clients shouldn't reshape time-series matrices
-- **Bangkok TZ hardcoded in `utils.py`** — the brief specifies a
+- **Bangkok TZ hardcoded in `utils.py`** — the spec describes a
   Bangkok building; UTC anchoring made "06:00 building opens" land at
   13:00 local. Production multi-region would lift to settings
 - **`DayPlan` as single source for readings + decisions** — chart
@@ -191,7 +191,7 @@ matter as the system grows.
 - Per-zone energy budgets — operational targets distinct from
   fault-detection alerts
 - Rolling 7-day / month-to-date summaries
-- Option B from the brief: one-click monthly PDF (we shipped A and C)
+- Option B from the spec: one-click monthly PDF (we shipped A and C)
 
 **Data realism**
 

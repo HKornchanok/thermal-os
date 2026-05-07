@@ -39,15 +39,15 @@ DESIGN.md §1A: AI decisions are sparse (~23/day) vs sensor readings (~3,456/day
 
 ## Files
 
-| Path | Purpose |
-|------|---------|
-| `backend/building/models.py` | Three model classes with `db_table` matching DESIGN.md exactly |
-| `backend/building/admin.py` | All three models registered with sensible `list_display` / filters |
-| `backend/building/migrations/0001_initial.py` | Hand-written migration matching what `makemigrations` would produce — checked in so `migrate` works on fresh clones without first running `makemigrations` |
-| `backend/building/migrations/0002_timescale.py` | `RunSQL`: composite PK swap, `create_hypertable`, three indexes |
-| `backend/building/management/commands/seed.py` | The seed command — 360 lines, fully deterministic via `random.seed(42)` |
-| `docker-compose.yml` | Parameterised ports (`${DB_PORT:-5432}`, `${BACKEND_PORT:-8000}`) so the stack can run alongside another project on the same host |
-| `backend/Dockerfile` | Pip install now reads dependencies from `pyproject.toml` via `tomllib` instead of `pip install -e .`, which fixed a build-order bug where setuptools couldn't find the package directories |
+| Path                                            | Purpose                                                                                                                                                                                    |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `backend/building/models.py`                    | Three model classes with `db_table` matching DESIGN.md exactly                                                                                                                             |
+| `backend/building/admin.py`                     | All three models registered with sensible `list_display` / filters                                                                                                                         |
+| `backend/building/migrations/0001_initial.py`   | Hand-written migration matching what `makemigrations` would produce — checked in so `migrate` works on fresh clones without first running `makemigrations`                                 |
+| `backend/building/migrations/0002_timescale.py` | `RunSQL`: composite PK swap, `create_hypertable`, three indexes                                                                                                                            |
+| `backend/building/management/commands/seed.py`  | The seed command — 360 lines, fully deterministic via `random.seed(42)`                                                                                                                    |
+| `docker-compose.yml`                            | Parameterised ports (`${DB_PORT:-5432}`, `${BACKEND_PORT:-8000}`) so the stack can run alongside another project on the same host                                                          |
+| `backend/Dockerfile`                            | Pip install now reads dependencies from `pyproject.toml` via `tomllib` instead of `pip install -e .`, which fixed a build-order bug where setuptools couldn't find the package directories |
 
 ## Seed properties
 
@@ -61,13 +61,13 @@ DESIGN.md §1A: AI decisions are sparse (~23/day) vs sensor readings (~3,456/day
 
 ## Verification (already executed)
 
-Ran end-to-end on an isolated test stack (`-p alto-tech-test`, ports 5433/8001 to avoid colliding with another project on 5432/8000):
+Ran end-to-end on an isolated test stack (`-p thermalos-test`, ports 5433/8001 to avoid colliding with another project on 5432/8000):
 
 ```
-$ docker compose -p alto-tech-test up -d --build
+$ docker compose -p thermalos-test up -d --build
 Applying building.0001_initial... OK
 Applying building.0002_timescale... OK
-$ docker compose -p alto-tech-test exec backend python manage.py seed --clear
+$ docker compose -p thermalos-test exec backend python manage.py seed --clear
 Created 12 machines
 Generating readings: 2026-03-29T14:50 → 2026-05-03T14:50 (manual until 2026-04-15T14:50, then AI)
 Created 120,972 sensor readings
@@ -76,6 +76,7 @@ Injected alert seeds (power_spike, temp_drift, nonstop_runtime)
 ```
 
 Checks:
+
 - Hypertable registered: `SELECT * FROM timescaledb_information.hypertables` → 1 row
 - Chunks: 36 (one per day in the 35-day window plus the partial day at the end)
 - Composite PK: `\d building_sensorreading` → `PRIMARY KEY, btree (id, recorded_at)`
@@ -85,7 +86,7 @@ Checks:
 ## How to run for yourself
 
 ```bash
-cd /Users/kornchanokiednusorn/alto-tech
+cd /path/to/repo
 
 # If the default ports clash with another project, override:
 #   DB_PORT=5433 BACKEND_PORT=8001 docker compose ...

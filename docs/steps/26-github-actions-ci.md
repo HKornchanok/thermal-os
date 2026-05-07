@@ -56,6 +56,7 @@ Already clean: `prettier --check` passes, `tsc --noEmit` passes,
 ## Verification
 
 Ran the full CI pipeline locally (against the dev compose containers):
+
 - `ruff check .` → All checks passed
 - `pytest -q` → 125 passed, 1 warning
 - `npm run format:check` → All matched files use Prettier code style

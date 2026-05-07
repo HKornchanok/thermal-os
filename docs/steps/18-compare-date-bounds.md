@@ -73,14 +73,15 @@ inputs is gone — inputs are always populated now.
 
 In Playwright (current 7-day seed, browser TZ Asia/Bangkok):
 
-| Input | value | min | max |
-|-------|-------|-----|-----|
+| Input         | value      | min        | max        |
+| ------------- | ---------- | ---------- | ---------- |
 | period-a-from | 2026-04-28 | 2026-04-28 | 2026-04-30 |
-| period-a-to | 2026-04-30 | 2026-04-28 | 2026-04-30 |
+| period-a-to   | 2026-04-30 | 2026-04-28 | 2026-04-30 |
 | period-b-from | 2026-05-01 | 2026-05-01 | 2026-05-03 |
-| period-b-to | 2026-05-03 | 2026-05-01 | 2026-05-03 |
+| period-b-to   | 2026-05-03 | 2026-05-01 | 2026-05-03 |
 
 KPIs at default:
+
 - Before — avg power: **1,180.8 kW**
 - After — avg power: **816.9 kW**
 - Savings: **30.8%** (manual cut by AI, equal 3-day windows)

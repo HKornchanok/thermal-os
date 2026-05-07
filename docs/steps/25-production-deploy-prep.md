@@ -7,6 +7,7 @@ production variants without touching the dev workflow.
 ## What changed
 
 ### Backend
+
 - `backend/Dockerfile.prod` — gunicorn (3 workers, configurable via
   `GUNICORN_WORKERS`), build-time `collectstatic`, runtime `migrate`.
 - `backend/pyproject.toml` — added `whitenoise` to base deps (middleware
@@ -20,6 +21,7 @@ production variants without touching the dev workflow.
     doesn't have.
 
 ### Frontend
+
 - `frontend/Dockerfile.prod` — three-stage (deps → builder → runner)
   using Next.js standalone output. Final image runs as non-root
   `nextjs:nodejs` and ships only `server.js` + minimal `node_modules`
@@ -27,6 +29,7 @@ production variants without touching the dev workflow.
 - `frontend/next.config.js` — added `output: "standalone"`.
 
 ### Compose / config
+
 - `docker-compose.prod.yml` — separate file consumed via
   `docker compose -f docker-compose.prod.yml --env-file .env.prod up`.
   All required env vars use `${VAR:?…}` so the stack refuses to boot
@@ -40,6 +43,7 @@ production variants without touching the dev workflow.
 ## Why a separate Dockerfile and compose file
 
 Two reasons:
+
 1. The dev image installs `pytest`/`ruff`; the prod image deliberately
    does not. Mixing both in one `Dockerfile` means either prod ships
    test deps (bigger surface) or dev tests can't be run (`pytest` not
@@ -48,7 +52,7 @@ Two reasons:
    files keep the intent explicit.
 
 The image-name collision (both compose files default to
-`alto-tech-backend:latest`) is a known wrinkle — switching between
+`thermalos-backend:latest`) is a known wrinkle — switching between
 dev and prod requires a `docker compose build` to re-tag.
 
 ## ALLOWED_HOSTS gotcha
@@ -61,6 +65,7 @@ public hostnames. Documented in `.env.prod.example`.
 ## Verification
 
 Built and ran the prod stack against a real env file:
+
 - `docker compose -f docker-compose.prod.yml --env-file .env.prod.test build` — clean
 - `up -d` — db healthy, gunicorn boots with 2 workers (test value),
   migrations applied
@@ -72,9 +77,10 @@ Built and ran the prod stack against a real env file:
   confirming WhiteNoise serves collected static under `DEBUG=False`
 - `pytest -q` (dev image) — **125 passed**, 1 warning (unchanged)
 
-## What this is *not*
+## What this is _not_
 
 This is the self-host / VPS shape. Real production should still:
+
 - Push the backend image to Fly / Railway / Cloud Run; frontend to Vercel
 - Use managed Postgres with the Timescale extension (Timescale Cloud)
 - Terminate TLS at the platform edge

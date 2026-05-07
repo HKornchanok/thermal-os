@@ -59,7 +59,7 @@ fixes in one branch (`chore/be-quality-fixes`).
 
 - **`resolve_window` helper (`backend/building/utils.py`).** Four views
   open-coded the same `to_dt = MAX(recorded_at) ... from_dt = to_dt -
-  Δ` pattern. Centralised; views now early-return on the empty-DB path
+Δ` pattern. Centralised; views now early-return on the empty-DB path
   via a single `if window is None`.
 
 - **`yesterday_kwh_or_none` helper.** Same "treat 0/NULL as no data"

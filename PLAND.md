@@ -40,7 +40,7 @@ Implements **DESIGN §1A**.
   5-minute readings (24,192 rows) split 3 manual / 4 AI
 
 The seed evolved significantly past the initial draft — see steps
-16 (rewrite for brief compliance), 17/20 (Bangkok TZ anchoring), 19
+16 (rewrite for spec compliance), 17/20 (Bangkok TZ anchoring), 19
 (per-day `DayPlan` for AI variation), 21 (engineered alert anomalies).
 
 ✅ Hypertable visible in `\d+ building_sensorreading`. Seed
@@ -61,7 +61,7 @@ Implements **DESIGN §1B (auth)**.
 Frontend half landed in [step 04](./docs/steps/04-frontend-auth-minimum.md):
 NextAuth `CredentialsProvider`, JWT in httpOnly cookie, refresh
 in the `jwt` callback, `enabled: !!session?.accessToken` gate on
-every hook, `AuthGate` on every protected route ([PR #23](https://github.com/HKornchanok/alto-tech/pull/23)).
+every hook, `AuthGate` on every protected route (PR #23).
 
 ✅ `POST /api/auth/token/` issues access + refresh; bearer-protected
 endpoints 401 without it.
@@ -74,18 +74,18 @@ Implements **DESIGN §1B endpoint catalog**. Hot paths use raw SQL via
 `connection.cursor()` per the spec.
 
 **Shipped** in [step 05](./docs/steps/05-read-endpoints.md) across
-PRs [#1–#8](https://github.com/HKornchanok/alto-tech/pulls?q=is%3Apr+is%3Aclosed):
+PRs #1–#8:
 
-| #   | Endpoint                            | PR                                                    |
-| --- | ----------------------------------- | ----------------------------------------------------- |
-| 3.1 | `GET /api/machines/`                | [#1](https://github.com/HKornchanok/alto-tech/pull/1) |
-| 3.2 | `GET /api/machines/{id}/sensors/`   | [#2](https://github.com/HKornchanok/alto-tech/pull/2) |
-| 3.3 | `GET /api/building/summary/`        | [#3](https://github.com/HKornchanok/alto-tech/pull/3) |
-| 3.4 | `GET /api/building/energy/`         | [#4](https://github.com/HKornchanok/alto-tech/pull/4) |
-| 3.5 | `GET /api/building/energy/by-zone/` | [#5](https://github.com/HKornchanok/alto-tech/pull/5) |
-| 3.6 | `GET /api/decisions/`               | [#6](https://github.com/HKornchanok/alto-tech/pull/6) |
-| 3.7 | `GET /api/energy/compare/`          | [#7](https://github.com/HKornchanok/alto-tech/pull/7) |
-| 3.8 | `GET /api/alerts/`                  | [#8](https://github.com/HKornchanok/alto-tech/pull/8) |
+| #   | Endpoint                            | PR  |
+| --- | ----------------------------------- | --- |
+| 3.1 | `GET /api/machines/`                | #1  |
+| 3.2 | `GET /api/machines/{id}/sensors/`   | #2  |
+| 3.3 | `GET /api/building/summary/`        | #3  |
+| 3.4 | `GET /api/building/energy/`         | #4  |
+| 3.5 | `GET /api/building/energy/by-zone/` | #5  |
+| 3.6 | `GET /api/decisions/`               | #6  |
+| 3.7 | `GET /api/energy/compare/`          | #7  |
+| 3.8 | `GET /api/alerts/`                  | #8  |
 
 Files: `building/views/{machines,building,decisions,energy_compare,alerts}.py`,
 `building/sql.py` (module-level SQL constants),
@@ -106,11 +106,11 @@ Implements **DESIGN §1C (architecture, shared components, styling)**.
 **Shipped** across steps 04, 09, 10, 11:
 
 - App shell + Sidebar + Layout with `AuthGate` wrapping protected
-  routes ([PR #10](https://github.com/HKornchanok/alto-tech/pull/10),
-  [PR #23](https://github.com/HKornchanok/alto-tech/pull/23))
-- shadcn/ui + tweakcn theme install + `next-themes` ([PR #9](https://github.com/HKornchanok/alto-tech/pull/9))
+  routes (PR #10,
+  PR #23)
+- shadcn/ui + tweakcn theme install + `next-themes` (PR #9)
 - TanStack Query foundation, `apiFetch` helper, hook-per-endpoint
-  ([PR #11](https://github.com/HKornchanok/alto-tech/pull/11))
+  (PR #11)
 - Shared components: `KpiCard`, `MachineCard`, `StatusBadge`,
   `AlertBanner`, `AreaChart`, `LoadingState`, `ErrorState`,
   `EmptyState`, `MarkdownMessage`, `DataTable` + `ColumnFilter`
@@ -127,14 +127,14 @@ with bearer attached; theme tokens applied throughout.
 Each page follows the `loading → error → empty → happy` pattern
 from DESIGN §"Data-Fetching Pattern".
 
-| Page         | PR                                                                                                                                                                        | Notes                                                    |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `/login`     | [#10](https://github.com/HKornchanok/alto-tech/pull/10)                                                                                                                   | Credentials form → NextAuth                              |
-| `/` Overview | [#17](https://github.com/HKornchanok/alto-tech/pull/17)                                                                                                                   | AlertBanner + 6 KPIs + 12 machine cards                  |
-| `/machines`  | [#16](https://github.com/HKornchanok/alto-tech/pull/16), [#22](https://github.com/HKornchanok/alto-tech/pull/22)                                                          | Selection in `?selected=`; "now" reference line on chart |
-| `/energy`    | [#14](https://github.com/HKornchanok/alto-tech/pull/14), [#15](https://github.com/HKornchanok/alto-tech/pull/15)                                                          | Total ↔ By Zone, 15-colour palette, interactive legend   |
-| `/decisions` | [#12](https://github.com/HKornchanok/alto-tech/pull/12)                                                                                                                   | TanStack Table v8 + per-column filter popovers           |
-| `/compare`   | [#18](https://github.com/HKornchanok/alto-tech/pull/18), [#28](https://github.com/HKornchanok/alto-tech/pull/28), [#37](https://github.com/HKornchanok/alto-tech/pull/37) | Overlaid AreaChart, per-period bounds, diff in tooltip   |
+| Page         | PR            | Notes                                                    |
+| ------------ | ------------- | -------------------------------------------------------- |
+| `/login`     | #10           | Credentials form → NextAuth                              |
+| `/` Overview | #17           | AlertBanner + 6 KPIs + 12 machine cards                  |
+| `/machines`  | #16, #22      | Selection in `?selected=`; "now" reference line on chart |
+| `/energy`    | #14, #15      | Total ↔ By Zone, 15-colour palette, interactive legend   |
+| `/decisions` | #12           | TanStack Table v8 + per-column filter popovers           |
+| `/compare`   | #18, #28, #37 | Overlaid AreaChart, per-period bounds, diff in tooltip   |
 
 ✅ Every page renders happy path against seeded data.
 
@@ -145,20 +145,20 @@ from DESIGN §"Data-Fetching Pattern".
 **Shipped** in [step 10](./docs/steps/10-phase-6-polish.md) and
 follow-ups: `fmtNum()` applied to all kWh/kW values, all colours
 via CSS variables (zero hardcoded hex), `enabled` gate audited,
-favicons + page titles per route, [PR #20](https://github.com/HKornchanok/alto-tech/pull/20),
-[PR #25](https://github.com/HKornchanok/alto-tech/pull/25).
+favicons + page titles per route, PR #20,
+PR #25.
 
 [step 11](./docs/steps/11-prettier-pre-commit.md): Prettier + Husky
-pre-commit hook + lint-staged ([PR #21](https://github.com/HKornchanok/alto-tech/pull/21)).
+pre-commit hook + lint-staged (PR #21).
 
 ---
 
 ## Phase 7 — Bonus: AI Chat (Option A)
 
 **Shipped** in [step 09](./docs/steps/09-chat-assistant.md)
-([PR #19](https://github.com/HKornchanok/alto-tech/pull/19)),
-later enriched in [PR #35](https://github.com/HKornchanok/alto-tech/pull/35) and
-[PR #36](https://github.com/HKornchanok/alto-tech/pull/36):
+(PR #19),
+later enriched in PR #35 and
+PR #36:
 
 - `building/views/chat.py` — `POST /api/chat/`, validates `message`,
   graceful fallback when key unset, typed exception handling for
@@ -178,11 +178,11 @@ graceful fallback message, never 500.
 ## Phase 8 — Verification & docs
 
 **Shipped** in [step 12](./docs/steps/12-readme-and-verification.md)
-([PR #22](https://github.com/HKornchanok/alto-tech/pull/22)) and
-later compactions ([PR #38](https://github.com/HKornchanok/alto-tech/pull/38),
-[PR #39](https://github.com/HKornchanok/alto-tech/pull/39),
-[PR #46](https://github.com/HKornchanok/alto-tech/pull/46),
-[PR #47](https://github.com/HKornchanok/alto-tech/pull/47)):
+(PR #22) and
+later compactions (PR #38,
+PR #39,
+PR #46,
+PR #47):
 
 - README — quickstart, login, frontend routes, API table, architecture,
   tech stack, verification, production deploy, decisions, "What I'd
@@ -200,13 +200,13 @@ later compactions ([PR #38](https://github.com/HKornchanok/alto-tech/pull/38),
 Past Phase 8 the project shipped four hardening passes that weren't
 in the original plan but proved load-bearing for "ready to ship":
 
-| Work                           | PR                                                                                                               | Notes                                                                                                                                            |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Backend audit & quality fixes  | [#42](https://github.com/HKornchanok/alto-tech/pull/42)                                                          | 16 findings — naive-datetime rejection, `resolve_window`, RNG state leak, API contract guards. [step 23](./docs/steps/23-backend-audit-fixes.md) |
-| Frontend audit & quality fixes | [#40](https://github.com/HKornchanok/alto-tech/pull/40)                                                          | a11y, focus rings, KPI composition                                                                                                               |
-| Comment cleanup (FE then BE)   | [#41](https://github.com/HKornchanok/alto-tech/pull/41), [#43](https://github.com/HKornchanok/alto-tech/pull/43) | 17 → 5 % FE density; backend views 11 → 4 %. [step 24](./docs/steps/24-backend-comment-cleanup.md)                                               |
-| Production deploy variants     | [#44](https://github.com/HKornchanok/alto-tech/pull/44)                                                          | gunicorn + WhiteNoise, Next.js standalone, `docker-compose.prod.yml`, `.env.prod.example`. [step 25](./docs/steps/25-production-deploy-prep.md)  |
-| GitHub Actions CI              | [#45](https://github.com/HKornchanok/alto-tech/pull/45)                                                          | ruff + pytest + prettier + typecheck + build on every PR. Ruff cleanup pass: 57 → 0. [step 26](./docs/steps/26-github-actions-ci.md)             |
+| Work                           | PR       | Notes                                                                                                                                            |
+| ------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Backend audit & quality fixes  | #42      | 16 findings — naive-datetime rejection, `resolve_window`, RNG state leak, API contract guards. [step 23](./docs/steps/23-backend-audit-fixes.md) |
+| Frontend audit & quality fixes | #40      | a11y, focus rings, KPI composition                                                                                                               |
+| Comment cleanup (FE then BE)   | #41, #43 | 17 → 5 % FE density; backend views 11 → 4 %. [step 24](./docs/steps/24-backend-comment-cleanup.md)                                               |
+| Production deploy variants     | #44      | gunicorn + WhiteNoise, Next.js standalone, `docker-compose.prod.yml`, `.env.prod.example`. [step 25](./docs/steps/25-production-deploy-prep.md)  |
+| GitHub Actions CI              | #45      | ruff + pytest + prettier + typecheck + build on every PR. Ruff cleanup pass: 57 → 0. [step 26](./docs/steps/26-github-actions-ci.md)             |
 
 ---
 

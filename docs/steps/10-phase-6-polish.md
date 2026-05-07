@@ -19,15 +19,15 @@ machine count) — separators would be visual noise on `12.5°C`.
 
 ### Where applied
 
-| Location                    | Before                              | After                       |
-|-----------------------------|-------------------------------------|-----------------------------|
-| Overview — Total power      | `${total_power_kw.toFixed(1)} kW`   | `${fmtNum(total_power_kw)} kW` |
-| Overview — Today's energy   | `${today_kwh.toFixed(1)} kWh`       | `${fmtNum(today_kwh)} kWh`     |
-| Overview — Yesterday        | `${yesterday_kwh.toFixed(1)} kWh`   | `${fmtNum(yesterday_kwh)} kWh` |
-| Energy — Peak / Average     | `${peak.toFixed(1)} kW`             | `${fmtNum(peak)} kW`           |
-| Energy — chart Y/tooltip    | `${(v).toFixed(1)} kW`              | `${fmtNum(v as number)} kW`    |
-| Compare — Before/After avg  | `${avg_kw.toFixed(0)} kW`           | `${fmtNum(avg_kw)} kW`         |
-| Compare — chart Y/tooltip   | `${(v).toFixed(1)} kW`              | `${fmtNum(v as number)} kW`    |
+| Location                   | Before                            | After                          |
+| -------------------------- | --------------------------------- | ------------------------------ |
+| Overview — Total power     | `${total_power_kw.toFixed(1)} kW` | `${fmtNum(total_power_kw)} kW` |
+| Overview — Today's energy  | `${today_kwh.toFixed(1)} kWh`     | `${fmtNum(today_kwh)} kWh`     |
+| Overview — Yesterday       | `${yesterday_kwh.toFixed(1)} kWh` | `${fmtNum(yesterday_kwh)} kWh` |
+| Energy — Peak / Average    | `${peak.toFixed(1)} kW`           | `${fmtNum(peak)} kW`           |
+| Energy — chart Y/tooltip   | `${(v).toFixed(1)} kW`            | `${fmtNum(v as number)} kW`    |
+| Compare — Before/After avg | `${avg_kw.toFixed(0)} kW`         | `${fmtNum(avg_kw)} kW`         |
+| Compare — chart Y/tooltip  | `${(v).toFixed(1)} kW`            | `${fmtNum(v as number)} kW`    |
 
 Not applied:
 

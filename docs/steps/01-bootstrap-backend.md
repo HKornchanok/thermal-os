@@ -10,18 +10,18 @@ PLAND.md Phase 0 — establish a runnable backend container talking to Timescale
 
 ## Files created
 
-| Path | Purpose |
-|------|---------|
-| `docker-compose.yml` | `db` (TimescaleDB pg15) + `backend` (Django) services with healthcheck-gated dependency |
-| `.gitignore` | Python/Node/IDE/env exclusions |
-| `backend/Dockerfile` | python:3.12-slim image, installs project via `pip install -e .`, runs `migrate` then `runserver` |
-| `backend/.dockerignore` | Excludes venvs, caches, secrets from build context |
-| `backend/.env.example` | Template for `DATABASE_URL`, `DJANGO_SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, `ANTHROPIC_API_KEY` |
-| `backend/pyproject.toml` | Dependencies (django, drf, simplejwt, psycopg, dj-database-url, cors-headers, anthropic) + ruff/pytest config |
-| `backend/manage.py` | Standard Django entry point |
-| `backend/thermalos/{__init__,settings,urls,wsgi,asgi}.py` | Project package — minimal settings reading from env, root URLConf includes `building.urls` under `/api/` |
-| `backend/building/{__init__,apps,admin,models,views,serializers,sql,urls}.py` | App stubs (mostly empty) — `urls.py` exposes empty `urlpatterns` so `include('building.urls')` doesn't fail |
-| `backend/building/migrations/__init__.py` | Migrations package |
+| Path                                                                          | Purpose                                                                                                       |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `docker-compose.yml`                                                          | `db` (TimescaleDB pg15) + `backend` (Django) services with healthcheck-gated dependency                       |
+| `.gitignore`                                                                  | Python/Node/IDE/env exclusions                                                                                |
+| `backend/Dockerfile`                                                          | python:3.12-slim image, installs project via `pip install -e .`, runs `migrate` then `runserver`              |
+| `backend/.dockerignore`                                                       | Excludes venvs, caches, secrets from build context                                                            |
+| `backend/.env.example`                                                        | Template for `DATABASE_URL`, `DJANGO_SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS`, `ANTHROPIC_API_KEY`               |
+| `backend/pyproject.toml`                                                      | Dependencies (django, drf, simplejwt, psycopg, dj-database-url, cors-headers, anthropic) + ruff/pytest config |
+| `backend/manage.py`                                                           | Standard Django entry point                                                                                   |
+| `backend/thermalos/{__init__,settings,urls,wsgi,asgi}.py`                     | Project package — minimal settings reading from env, root URLConf includes `building.urls` under `/api/`      |
+| `backend/building/{__init__,apps,admin,models,views,serializers,sql,urls}.py` | App stubs (mostly empty) — `urls.py` exposes empty `urlpatterns` so `include('building.urls')` doesn't fail   |
+| `backend/building/migrations/__init__.py`                                     | Migrations package                                                                                            |
 
 ## Deviations from PLAND.md
 
@@ -31,7 +31,7 @@ PLAND.md Phase 0 — establish a runnable backend container talking to Timescale
 ## Verify
 
 ```bash
-cd /Users/kornchanokiednusorn/alto-tech
+cd /path/to/repo
 docker compose up --build
 
 # In another terminal:

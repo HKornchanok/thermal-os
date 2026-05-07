@@ -26,16 +26,16 @@ Production traffic flows browser → `/api/...` → Next.js rewrite → Django, 
 
 ## Files
 
-| Path | Change |
-|------|--------|
-| `backend/thermalos/settings.py` | + `rest_framework`, `corsheaders` apps; + `corsheaders.middleware.CorsMiddleware` (top of MIDDLEWARE); + `REST_FRAMEWORK`, `SIMPLE_JWT`, `CORS_ALLOWED_ORIGINS` blocks; longer dev SECRET_KEY default to clear the HS256 32-byte minimum |
-| `backend/thermalos/urls.py` | + `path("api/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair")` and the matching refresh path |
-| `backend/Dockerfile` | Pip install now also pulls `[project.optional-dependencies.dev]` (pytest, pytest-django, ruff) |
-| `backend/.env.example` | Updated `DJANGO_SECRET_KEY` example to match the longer dev default |
-| `docker-compose.yml` | Updated `DJANGO_SECRET_KEY` default likewise |
-| `backend/building/tests/__init__.py` | New (empty) — tests package marker |
-| `backend/building/tests/conftest.py` | New — `api_client`, `user`, `auth_client` fixtures |
-| `backend/building/tests/test_auth.py` | New — 9 tests covering all auth flows |
+| Path                                  | Change                                                                                                                                                                                                                                   |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend/thermalos/settings.py`       | + `rest_framework`, `corsheaders` apps; + `corsheaders.middleware.CorsMiddleware` (top of MIDDLEWARE); + `REST_FRAMEWORK`, `SIMPLE_JWT`, `CORS_ALLOWED_ORIGINS` blocks; longer dev SECRET_KEY default to clear the HS256 32-byte minimum |
+| `backend/thermalos/urls.py`           | + `path("api/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair")` and the matching refresh path                                                                                                                       |
+| `backend/Dockerfile`                  | Pip install now also pulls `[project.optional-dependencies.dev]` (pytest, pytest-django, ruff)                                                                                                                                           |
+| `backend/.env.example`                | Updated `DJANGO_SECRET_KEY` example to match the longer dev default                                                                                                                                                                      |
+| `docker-compose.yml`                  | Updated `DJANGO_SECRET_KEY` default likewise                                                                                                                                                                                             |
+| `backend/building/tests/__init__.py`  | New (empty) — tests package marker                                                                                                                                                                                                       |
+| `backend/building/tests/conftest.py`  | New — `api_client`, `user`, `auth_client` fixtures                                                                                                                                                                                       |
+| `backend/building/tests/test_auth.py` | New — 9 tests covering all auth flows                                                                                                                                                                                                    |
 
 ## Settings shape
 
@@ -67,7 +67,7 @@ SIMPLE_JWT = {
 ## Test results (already executed)
 
 ```
-$ docker compose -p alto-tech-test exec backend pytest -v
+$ docker compose -p thermalos-test exec backend pytest -v
 building/tests/test_auth.py::test_token_obtain_with_valid_credentials_returns_access_and_refresh PASSED
 building/tests/test_auth.py::test_token_obtain_with_wrong_password_returns_401             PASSED
 building/tests/test_auth.py::test_token_obtain_with_unknown_user_returns_401               PASSED

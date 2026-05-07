@@ -443,7 +443,7 @@ component anyway.
 **Server-side pivot for by-zone** — Python `defaultdict` keyed by
 bucket. Clients shouldn't reshape time-series matrices.
 
-**Bangkok TZ hardcoded in `utils.py`** — the brief specifies a
+**Bangkok TZ hardcoded in `utils.py`** — the spec describes a
 Bangkok building. UTC anchoring made "06:00 building opens" land at
 13:00 local. A multi-region deployment would lift this to settings.
 

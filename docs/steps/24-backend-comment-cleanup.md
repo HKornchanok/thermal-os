@@ -9,18 +9,18 @@ false-positive history) were kept and compacted.
 
 ## Density before → after (comment lines / total)
 
-| File | Before | After |
-|------|-------:|------:|
-| `views/alerts.py`        | ~11% |  4.5% |
-| `views/building.py`      |  7.0% |  4.2% |
-| `views/chat.py`          | 12.6% |  6.2% |
-| `views/decisions.py`     |  6.8% |  2.6% |
-| `views/energy_compare.py`|  9.8% |  8.3% |
-| `views/machines.py`      |  8.8% |  7.1% |
-| `sql.py`                 | 35.5% | 24.9% |
-| `utils.py`               | 19.7% | 13.9% |
-| `thermalos/settings.py`  |  7.5% |  2.9% |
-| `management/commands/seed.py` | 23.0% | 11.6% |
+| File                          | Before | After |
+| ----------------------------- | -----: | ----: |
+| `views/alerts.py`             |   ~11% |  4.5% |
+| `views/building.py`           |   7.0% |  4.2% |
+| `views/chat.py`               |  12.6% |  6.2% |
+| `views/decisions.py`          |   6.8% |  2.6% |
+| `views/energy_compare.py`     |   9.8% |  8.3% |
+| `views/machines.py`           |   8.8% |  7.1% |
+| `sql.py`                      |  35.5% | 24.9% |
+| `utils.py`                    |  19.7% | 13.9% |
+| `thermalos/settings.py`       |   7.5% |  2.9% |
+| `management/commands/seed.py` |  23.0% | 11.6% |
 
 `sql.py` stays denser than the rest by design — each constant carries a
 one-line `/api/...` purpose tag so view files stay readable.
