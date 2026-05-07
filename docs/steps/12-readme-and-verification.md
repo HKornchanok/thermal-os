@@ -2,7 +2,7 @@
 
 PR #22 — `docs/readme-and-verification` → `main`
 
-Closes out PLAND.md Phase 8: top-level README, verification gates, and
+Closes out PLAN.md Phase 8: top-level README, verification gates, and
 a couple of typecheck fixes uncovered while running the build.
 
 ## What landed
@@ -60,7 +60,7 @@ this were to grow, a GitHub Actions workflow with the same three steps
 
 ## Phase 8 closeout
 
-PLAND.md Phase 8 verification checklist is now satisfied:
+PLAN.md Phase 8 verification checklist is now satisfied:
 
 - [x] `docker compose up` brings the stack up cleanly from a clean clone
 - [x] `pytest -q` green

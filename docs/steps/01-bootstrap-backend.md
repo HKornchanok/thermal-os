@@ -6,7 +6,7 @@ Skeleton Django 5 project + docker-compose stack (TimescaleDB + backend service)
 
 ## Why
 
-PLAND.md Phase 0 — establish a runnable backend container talking to TimescaleDB before adding any models, auth, or endpoints. Subsequent phases (schema, auth, API) all assume `docker-compose up` brings the stack up cleanly.
+PLAN.md Phase 0 — establish a runnable backend container talking to TimescaleDB before adding any models, auth, or endpoints. Subsequent phases (schema, auth, API) all assume `docker-compose up` brings the stack up cleanly.
 
 ## Files created
 
@@ -23,7 +23,7 @@ PLAND.md Phase 0 — establish a runnable backend container talking to Timescale
 | `backend/building/{__init__,apps,admin,models,views,serializers,sql,urls}.py` | App stubs (mostly empty) — `urls.py` exposes empty `urlpatterns` so `include('building.urls')` doesn't fail   |
 | `backend/building/migrations/__init__.py`                                     | Migrations package                                                                                            |
 
-## Deviations from PLAND.md
+## Deviations from PLAN.md
 
 1. **Image:** used `timescale/timescaledb:latest-pg15` (vanilla) instead of `timescale/timescaledb-ha:pg15-latest`. Vanilla image has a predictable PGDATA path (`/var/lib/postgresql/data`) and a smaller footprint — fine for dev. The HA variant adds Patroni/replication tooling we don't need. Will revisit if production deployment is in scope.
 2. **Env handling:** docker-compose sets `environment:` inline with `${VAR:-default}` interpolation rather than `env_file: ./backend/.env`. This means the stack runs out of the box with no `.env` file required. `.env.example` is still provided for users who want to override.
@@ -41,7 +41,7 @@ docker compose exec db psql -U thermalos -d thermalos -c "\dx"
 # → should list 'timescaledb' extension as installed
 ```
 
-Acceptance from PLAND Phase 0: `docker compose up` brings up cleanly, `curl localhost:8000/api/` returns 404. Both met when run.
+Acceptance from PLAN Phase 0: `docker compose up` brings up cleanly, `curl localhost:8000/api/` returns 404. Both met when run.
 
 ## Next
 

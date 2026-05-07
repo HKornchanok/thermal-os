@@ -19,7 +19,7 @@ Every read endpoint listed in DESIGN.md §1B (excluding the bonus chat) is now i
 
 ## Why
 
-PLAND.md Phase 3. Every frontend page in Phase 5 needs at least one of these endpoints. Auth (Phase 2) is fail-closed by default, so the verification pattern for each endpoint was the same: 401 without bearer, 200 with bearer + correct shape, plus rule-specific assertions (allowlist enforcement, pagination math, alert seed visibility, etc.).
+PLAN.md Phase 3. Every frontend page in Phase 5 needs at least one of these endpoints. Auth (Phase 2) is fail-closed by default, so the verification pattern for each endpoint was the same: 401 without bearer, 200 with bearer + correct shape, plus rule-specific assertions (allowlist enforcement, pagination math, alert seed visibility, etc.).
 
 ## Workflow
 

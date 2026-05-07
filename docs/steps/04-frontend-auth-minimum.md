@@ -10,7 +10,7 @@ A working Next.js (Pages Router, TypeScript) frontend wired to NextAuth's Creden
 - `next.config.js` rewrite that proxies `/api/*` to Django **except** `/api/auth/*`, which stays local.
 - New `frontend` service in `docker-compose.yml` running `next dev` on port 3000.
 
-This is intentionally not the full Phase 4 from PLAND.md — there's no TanStack Query, no Sidebar, no shadcn/ui, no theme. Those land alongside the read endpoints in subsequent steps. The goal here was to make auth visibly testable.
+This is intentionally not the full Phase 4 from PLAN.md — there's no TanStack Query, no Sidebar, no shadcn/ui, no theme. Those land alongside the read endpoints in subsequent steps. The goal here was to make auth visibly testable.
 
 ## Why
 
