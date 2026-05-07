@@ -25,7 +25,6 @@ from building.utils import (
     yesterday_kwh_or_none,
 )
 
-
 # Snapshot is the bulk of the prompt by token count; pulling more than
 # the minimum lets the model answer diagnostic questions ("why was
 # yesterday high?") without hedging. Cached on the system block so

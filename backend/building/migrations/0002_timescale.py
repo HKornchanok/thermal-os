@@ -1,6 +1,5 @@
 from django.db import migrations
 
-
 FORWARD_SQL = """
 -- TimescaleDB extension is preinstalled in the timescale/timescaledb image,
 -- but the per-database CREATE EXTENSION is idempotent and harmless to repeat.

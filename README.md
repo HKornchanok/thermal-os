@@ -1,5 +1,7 @@
 # ThermalOS
 
+[![CI](https://github.com/HKornchanok/alto-tech/actions/workflows/ci.yml/badge.svg)](https://github.com/HKornchanok/alto-tech/actions/workflows/ci.yml)
+
 Building energy monitoring dashboard for the AltoTech full-stack assessment.
 Tracks 12 HVAC machines (large ACs, small ACs, fans) across 6 zones, surfaces
 live KPIs, time-series charts, an AI decision audit trail, before/after energy

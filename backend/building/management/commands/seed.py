@@ -33,16 +33,15 @@ from __future__ import annotations
 
 import math
 import random
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Iterable
 
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from building.models import AIDecision, Machine, SensorReading
-
 
 # Schedule hours ("06:00 opens", "22:00 night mode") are Bangkok local.
 # Generate in BANGKOK_TZ; Django converts to UTC on save (USE_TZ=True).

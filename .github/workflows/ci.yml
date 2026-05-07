@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same branch — saves CI minutes when
+# pushing rapid follow-ups.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      db:
+        image: timescale/timescaledb:latest-pg15
+        env:
+          POSTGRES_USER: thermalos
+          POSTGRES_PASSWORD: thermalos
+          POSTGRES_DB: thermalos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U thermalos -d thermalos"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://thermalos:thermalos@localhost:5432/thermalos
+      # CI uses DEBUG=true so the dev-secret RuntimeError doesn't fire and
+      # we don't need to plumb a real secret through to a test environment.
+      DJANGO_SECRET_KEY: ci-not-a-real-secret-tests-only-${{ github.run_id }}
+      DEBUG: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Run tests
+        run: pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        # `npm ci` would invoke husky's `prepare` hook from package.json
+        # (which assumes a working tree with .husky/). Skip it on CI by
+        # disabling lifecycle scripts.
+        run: npm ci --ignore-scripts
+
+      - name: Prettier check
+        run: npm run format:check
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build

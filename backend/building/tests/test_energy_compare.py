@@ -1,16 +1,15 @@
 """Tests for GET /api/energy/compare/."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
-
 
 pytestmark = pytest.mark.django_db
 
 
 def _z(dt: datetime) -> str:
     """URL-safe ISO format (avoids `+` → space decoding)."""
-    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 # ---------- Auth gating ------------------------------------------------------
@@ -31,8 +30,8 @@ def test_compare_invalid_datetime_returns_400(admin_client):
 
 def test_compare_inverted_range_returns_400(admin_client):
     """from must be earlier than to — guard against frontend mistakes."""
-    earlier = _z(datetime(2026, 4, 1, tzinfo=timezone.utc))
-    later = _z(datetime(2026, 4, 10, tzinfo=timezone.utc))
+    earlier = _z(datetime(2026, 4, 1, tzinfo=UTC))
+    later = _z(datetime(2026, 4, 10, tzinfo=UTC))
     response = admin_client.get(
         f"/api/energy/compare/?a_from={later}&a_to={earlier}"
         f"&b_from={earlier}&b_to={later}"
@@ -124,8 +123,8 @@ def test_compare_identical_periods_returns_400(admin_client):
 def test_compare_partial_override_fills_missing_with_seed_boundaries(admin_client):
     """Supply only a_from + a_to. b_from and b_to should fill from
     midpoint and MAX(recorded_at) respectively."""
-    a_from_str = _z(datetime(2026, 4, 1, tzinfo=timezone.utc))
-    a_to_str = _z(datetime(2026, 4, 10, tzinfo=timezone.utc))
+    a_from_str = _z(datetime(2026, 4, 1, tzinfo=UTC))
+    a_to_str = _z(datetime(2026, 4, 10, tzinfo=UTC))
     response = admin_client.get(
         f"/api/energy/compare/?a_from={a_from_str}&a_to={a_to_str}"
     )

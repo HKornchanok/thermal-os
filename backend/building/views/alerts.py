@@ -7,7 +7,6 @@ from rest_framework.response import Response
 from building import sql
 from building.utils import dictfetchall
 
-
 _SEVERITY_ORDER = {"critical": 0, "warning": 1}
 _POWER_THRESHOLD_FRACTION = 0.90
 _TEMP_DRIFT_THRESHOLD = 2.0

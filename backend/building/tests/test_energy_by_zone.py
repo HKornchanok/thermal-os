@@ -1,9 +1,7 @@
 """Tests for GET /api/building/energy/by-zone/."""
 
-from datetime import datetime, timezone
 
 import pytest
-
 
 pytestmark = pytest.mark.django_db
 

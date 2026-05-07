@@ -1,16 +1,15 @@
 """Tests for GET /api/building/energy/."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
-
 
 pytestmark = pytest.mark.django_db
 
 
 def _z(dt: datetime) -> str:
     """Render a datetime in URL-safe Z form (avoids `+` → space decoding)."""
-    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 # ---------- Auth gating ------------------------------------------------------
@@ -97,9 +96,7 @@ def test_energy_15min_returns_more_points_than_1h(admin_client):
 
 def test_energy_custom_range_works(admin_client):
     """Use the seeded MAX(recorded_at) as the upper bound and look back 6h."""
-    summary_resp = admin_client.get("/api/building/summary/").json()
-    # We don't have direct access to max_ts via the API, but we can grab a
-    # reading timestamp from /machines/.
+    # No direct API for max_ts, so derive it from /machines/ latest readings.
     machines = admin_client.get("/api/machines/").json()
     latest_ts = max(
         datetime.fromisoformat(m["latest_reading"]["recorded_at"])
@@ -136,8 +133,8 @@ def test_energy_total_kw_is_sum_across_machines(admin_client):
 
 def test_energy_empty_range_returns_empty_list(admin_client):
     """Range entirely in the future relative to the seed → no rows."""
-    far_future = _z(datetime(2099, 1, 1, tzinfo=timezone.utc))
-    way_future = _z(datetime(2099, 1, 2, tzinfo=timezone.utc))
+    far_future = _z(datetime(2099, 1, 1, tzinfo=UTC))
+    way_future = _z(datetime(2099, 1, 2, tzinfo=UTC))
     response = admin_client.get(
         f"/api/building/energy/?from={far_future}&to={way_future}"
     )
