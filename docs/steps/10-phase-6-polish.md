@@ -2,7 +2,7 @@
 
 PR #20 — `chore/fe-phase-6-polish` → `main`
 
-Cross-cutting cleanup pass per PLAND.md Phase 6.
+Cross-cutting cleanup pass per PLAN.md Phase 6.
 
 ## What landed
 

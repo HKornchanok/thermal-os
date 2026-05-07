@@ -9,7 +9,7 @@
 
 ## Why
 
-PLAND.md Phase 1. Every API endpoint downstream depends on (a) a hypertable that supports `time_bucket`, and (b) data that exercises every dashboard feature on first load — KPIs, charts, alerts, before/after savings, and the AI decision log.
+PLAN.md Phase 1. Every API endpoint downstream depends on (a) a hypertable that supports `time_bucket`, and (b) data that exercises every dashboard feature on first load — KPIs, charts, alerts, before/after savings, and the AI decision log.
 
 ### Why a 5-minute sampling cadence (288 readings/machine/day)
 

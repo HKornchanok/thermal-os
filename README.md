@@ -7,7 +7,7 @@ take-home. Tracks 12 HVAC machines across 6 zones with live KPIs,
 time-series charts, an AI decision audit trail, before/after energy
 comparison, derived alerts, and an Anthropic-grounded chat assistant.
 
-> Spec: [`DESIGN.md`](./DESIGN.md) · Plan: [`PLAND.md`](./PLAND.md)
+> Spec: [`DESIGN.md`](./DESIGN.md) · Plan: [`PLAN.md`](./PLAN.md)
 > · Per-step notes: [`docs/steps/`](./docs/steps/)
 
 ## Quickstart

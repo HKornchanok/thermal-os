@@ -10,7 +10,7 @@
 
 ## Why
 
-PLAND.md Phase 2. Every API endpoint that ships in Phases 3 and beyond will return 401 unless authenticated; the frontend (Phase 4) ships with NextAuth's CredentialsProvider that posts to `/api/auth/token/` server-side. Locking auth down now and proving it works lets the rest of the build assume "if the request lands in a view, the user is authenticated" without re-litigating it for every endpoint.
+PLAN.md Phase 2. Every API endpoint that ships in Phases 3 and beyond will return 401 unless authenticated; the frontend (Phase 4) ships with NextAuth's CredentialsProvider that posts to `/api/auth/token/` server-side. Locking auth down now and proving it works lets the rest of the build assume "if the request lands in a view, the user is authenticated" without re-litigating it for every endpoint.
 
 ### Why JWT, not session cookies, for the API
 
