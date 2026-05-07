@@ -175,71 +175,58 @@ Headlines below; full reasoning in
 
 ## What I'd improve with more time
 
-Most of these aren't blockers at the current data volume but would
-matter as the system grows.
+Concrete, scoped follow-ups — not blockers today, but the first
+things I'd ship in a real production track.
 
-**Performance & data layer**
+**Performance & scale**
 
 - TimescaleDB continuous aggregates for hourly building totals and
-  per-zone daily kWh — at 24k rows the raw `time_bucket` queries are
-  ~10–30 ms; at millions they'd want pre-materialised aggregates
-- Cursor pagination on `/api/decisions/` — current `LIMIT/OFFSET`
-  walks the offset rows past ~10k decisions
-- Redis cache in front of `/api/machines/` and
-  `/api/building/summary/` — both polled every 30s by every client
-- Tighter rate-limit on `/api/chat/` (Anthropic credit drain risk)
+  per-zone daily kWh. At 24k rows raw `time_bucket` queries run in
+  ~10–30 ms; at millions they'd want pre-materialised refreshing
+  aggregates.
+- Redis cache in front of `/api/machines/` and `/api/building/summary/`.
+  Both are polled every 30s by every connected client — one shared
+  cache flattens the query load for a multi-user deployment.
+- Cursor pagination on `/api/decisions/`. Current `LIMIT/OFFSET`
+  walks the offset rows; fine for the demo, expensive past ~10k.
 
 **Reliability & ops**
 
-- Structured logging with correlation IDs across FE/BE/DB
-- `/api/health/` endpoint distinct from auth liveness
-- Sentry / similar APM for error tracking
+- `/api/health/` endpoint distinct from auth liveness — orchestrator
+  readiness probes shouldn't depend on the auth flow.
+- Structured logging with a request-id correlation across FE/BE/DB.
+  Turns "why was this user's chart blank?" from a forensic exercise
+  into one grep.
+- Sentry (or equivalent APM) for error tracking. Errors land in
+  container logs only right now.
 
-**Frontend**
+**Quality & testing**
 
-- Real e2e tests on Playwright (turn the test plan into a CI suite)
-- Storybook for `KpiCard`, `MachineCard`, `AlertBanner`, chart
-  permutations — visual-regression coverage matters for a chart-heavy
-  dashboard
-- Skeleton loading states instead of spinners
-- Accessibility pass with axe-core in CI (chart data is currently
-  inaccessible to screen readers)
-- Bundle analysis + per-route code splitting (TanStack Table on
-  /decisions, react-markdown on /chat)
-
-**AI & chat**
-
-- Tool-calling instead of front-loaded context — let Sonnet pull
-  only what it needs via the existing endpoints, instead of pumping
-  ~8.5 KB of snapshots into every system prompt
-- Multi-turn conversations (currently single-turn)
-- Streaming replies via `messages.stream()`
-
-**Features**
-
-- Cost view ($/kWh tariff converting every total into money)
-- Per-zone energy budgets — operational targets distinct from
-  fault-detection alerts
-- Rolling 7-day / month-to-date summaries
-- Option B from the spec: one-click monthly PDF (we shipped A and C)
-
-**Data realism**
-
-- Real weather API instead of the sinusoidal model — real load drives
-  a more meaningful AI control narrative
-- Replace canned AI decisions with an actual optimisation pass
-  (LP model or heuristic reading the sensor stream)
+- Playwright e2e suite in CI — promote the manual test plan into
+  scripted runs that catch regressions in login → Overview → drill-in.
+- Accessibility pass with axe-core in CI. Charts are currently
+  unreadable to screen readers; that's a known gap.
+- `pytest --cov` to surface untested branches (chat error paths
+  weren't covered until they bit us in PR #36).
+- Ruff in the pre-commit pipeline so backend formatting matches the
+  frontend's automatic Prettier flow.
 
 **Security**
 
-- DRF throttling scopes (per-user, per-endpoint, anonymous-burst)
-- CSP headers via Next.js middleware
-- Audit log for human actions (mirror of `building_aidecision`)
-- 2FA for admin accounts
+- CSP headers via Next.js middleware. Currently absent.
+- DRF throttling scopes beyond `/api/chat/` — anonymous-burst limit
+  on the auth endpoint is the obvious next one (brute-force surface).
+
+**AI & chat**
+
+- Streaming replies via `messages.stream()` — same network cost,
+  much better perceived latency than the current spinner→full-reply.
+- Multi-turn conversations. Every question is single-turn today;
+  threading conversation state would unlock follow-ups.
 
 **Code quality**
 
 - OpenAPI schema → frontend types (drf-spectacular +
-  openapi-typescript) so `frontend/src/lib/api.ts` isn't hand-mirrored
-- Ruff in the pre-commit pipeline (currently manual)
-- `pytest --cov` to surface untested paths
+  openapi-typescript). `frontend/src/lib/api.ts` hand-mirrors
+  backend response shapes today — single source of truth removes
+  a whole class of drift bugs.
