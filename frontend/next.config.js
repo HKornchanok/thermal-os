@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Self-contained server.js + minimal node_modules in .next/standalone —
+  // Dockerfile.prod copies just that, runtime image ~150MB.
+  output: "standalone",
   // Django expects trailing slashes on /api/* (`APPEND_SLASH = True` is the
   // Django default). Without this flag, Next.js's default behaviour 308-
   // redirects `/api/decisions/` to `/api/decisions`, which bypasses the

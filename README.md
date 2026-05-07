@@ -217,6 +217,29 @@ alto-tech/
   is formatted by ruff (run manually).
 - Backend tests live in `backend/building/tests/` — `pytest -q` runs them.
 
+## Production deploy
+
+The default `docker-compose.yml` is dev-only (`runserver`, `next dev`).
+For an exposed deployment use the production variant:
+
+```bash
+cp .env.prod.example .env.prod   # fill in secrets
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+```
+
+What that gives you:
+- Backend behind **gunicorn** (3 workers) with **WhiteNoise** serving
+  collected admin static under `DEBUG=False`
+- Frontend in Next.js **standalone** mode, non-root, ~150 MB image
+- DB password / Django secret / NextAuth secret all required (compose
+  refuses to boot otherwise)
+- Backend port not published — the frontend is the only public surface
+
+For real production the same images push cleanly to Fly / Railway /
+Cloud Run (backend) + Vercel (frontend) with a managed
+TimescaleDB-compatible Postgres. See `docs/steps/25-production-deploy-prep.md`
+for details and the `ALLOWED_HOSTS` gotcha.
+
 ## What I'd improve with more time
 
 Honest take on what's missing or could be sharper, grouped by where it
