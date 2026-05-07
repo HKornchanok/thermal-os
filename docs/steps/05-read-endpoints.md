@@ -4,16 +4,16 @@
 
 Every read endpoint listed in DESIGN.md §1B (excluding the bonus chat) is now implemented, tested, and verified live. Shipped across eight per-endpoint pull requests:
 
-| PR | Endpoint | Tests added | Cumulative tests |
-|---:|----------|------------:|-----------------:|
-| #1 | `GET /api/machines/` | 11 | 20 |
-| #2 | `GET /api/machines/{id}/sensors/` | 20 | 41 |
-| #3 | `GET /api/building/summary/` | 10 | 51 |
-| #4 | `GET /api/building/energy/` | 13 | 65 |
-| #5 | `GET /api/building/energy/by-zone/` | 11 | 77 |
-| #6 | `GET /api/decisions/` | 24 | 101 |
-| #7 | `GET /api/energy/compare/` | 11 | 112 |
-| #8 | `GET /api/alerts/` | 10 | 122 |
+|  PR | Endpoint                            | Tests added | Cumulative tests |
+| --: | ----------------------------------- | ----------: | ---------------: |
+|  #1 | `GET /api/machines/`                |          11 |               20 |
+|  #2 | `GET /api/machines/{id}/sensors/`   |          20 |               41 |
+|  #3 | `GET /api/building/summary/`        |          10 |               51 |
+|  #4 | `GET /api/building/energy/`         |          13 |               65 |
+|  #5 | `GET /api/building/energy/by-zone/` |          11 |               77 |
+|  #6 | `GET /api/decisions/`               |          24 |              101 |
+|  #7 | `GET /api/energy/compare/`          |          11 |              112 |
+|  #8 | `GET /api/alerts/`                  |          10 |              122 |
 
 **122/122 pytest tests green. ~5s avg run time.**
 
@@ -44,10 +44,10 @@ Every query lives in `building/sql.py` as a module-level string. User input alwa
 
 ### Bucket allowlists narrow as scale grows
 
-| Endpoint | Allowed buckets |
-|----------|-----------------|
-| `/machines/{id}/sensors/` | `5min`, `15min`, `1h`, `1d` |
-| `/building/energy/`, `/building/energy/by-zone/` | `15min`, `1h` |
+| Endpoint                                         | Allowed buckets             |
+| ------------------------------------------------ | --------------------------- |
+| `/machines/{id}/sensors/`                        | `5min`, `15min`, `1h`, `1d` |
+| `/building/energy/`, `/building/energy/by-zone/` | `15min`, `1h`               |
 
 5-min raw at 12-machine sum is too noisy for the area chart; 1-day is too coarse for the visible window. The narrower aggregate set is enforced via a separate constant (`ALLOWED_BUCKETS_AGGREGATE`).
 
@@ -115,7 +115,7 @@ backend/building/
 
 - Stack still up at `localhost:3000` (frontend), `localhost:8000` (backend), `localhost:5432` (db)
 - Tests run with `docker compose exec backend pytest`
-- Test stack on alt ports (`-p alto-tech-test`) was used during early verification but is torn down
+- Test stack on alt ports (`-p thermalos-test`) was used during early verification but is torn down
 
 ## Next
 

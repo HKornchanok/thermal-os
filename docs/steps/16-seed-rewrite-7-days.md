@@ -32,13 +32,13 @@ the brief specifies; the AI trail can be longer for development.
 Old seed had every non-critical machine ON 08:00–18:00 weekdays. New
 seed honours the brief's daily-pattern table:
 
-| Time         | What's running                              |
-|--------------|---------------------------------------------|
-| 00:00–06:00  | AC-S5 (server room) + FAN-01 (basement) — critical only |
-| 06:00–08:00  | Large ACs start, fans ramp on              |
-| 08:00–18:00  | All ACs and fans running                   |
-| 18:00–22:00  | Small ACs shut down gradually              |
-| 22:00–00:00  | AC-L1 (lobby) + AC-S5 + FAN-01 — night mode |
+| Time        | What's running                                          |
+| ----------- | ------------------------------------------------------- |
+| 00:00–06:00 | AC-S5 (server room) + FAN-01 (basement) — critical only |
+| 06:00–08:00 | Large ACs start, fans ramp on                           |
+| 08:00–18:00 | All ACs and fans running                                |
+| 18:00–22:00 | Small ACs shut down gradually                           |
+| 22:00–00:00 | AC-L1 (lobby) + AC-S5 + FAN-01 — night mode             |
 
 Implemented as `AI_SCHEDULE` — a per-machine `(start_min, end_min)`
 window. Manual period overrides this with a flat 06:00–22:00 for every
@@ -49,14 +49,14 @@ profile.
 
 Brief's appendix table is now the source of truth:
 
-| Machine | Brief | Old seed | New seed |
-|---------|-------|----------|----------|
-| AC-S3   | 10 kW | 12 kW    | **10 kW** |
-| AC-S4   | 10 kW | 12 kW    | **10 kW** |
-| FAN-01  | 5.5 kW| 5.0 kW   | **5.5 kW** |
-| FAN-02  | 3.5 kW| 3.0 kW   | **3.5 kW** |
-| FAN-03  | 4.0 kW| 3.0 kW   | **4.0 kW** |
-| FAN-04  | 4.0 kW| 3.0 kW   | **4.0 kW** |
+| Machine | Brief  | Old seed | New seed   |
+| ------- | ------ | -------- | ---------- |
+| AC-S3   | 10 kW  | 12 kW    | **10 kW**  |
+| AC-S4   | 10 kW  | 12 kW    | **10 kW**  |
+| FAN-01  | 5.5 kW | 5.0 kW   | **5.5 kW** |
+| FAN-02  | 3.5 kW | 3.0 kW   | **3.5 kW** |
+| FAN-03  | 4.0 kW | 3.0 kW   | **4.0 kW** |
+| FAN-04  | 4.0 kW | 3.0 kW   | **4.0 kW** |
 
 ### AI decisions: ~23/day → 10/day
 
@@ -122,11 +122,11 @@ The Smart Alerts bonus needs the banner to populate on first load,
 otherwise the most prominent feature looks empty. Three deliberate
 nudges to the trailing window of the seed:
 
-| Alert                    | Engineered value                              |
-|--------------------------|-----------------------------------------------|
-| `power_spike`  (AC-L1)   | Last reading shows **41.4 kW** (92% of 45 kW rated)         |
-| `temp_drift`   (AC-S2)   | Last reading shows **27.1°C** vs setpoint **24.0°C** (3.1°C drift) |
-| `nonstop_runtime` (AC-L3)| **19 hours** of forced ON in the trailing window           |
+| Alert                     | Engineered value                                                   |
+| ------------------------- | ------------------------------------------------------------------ |
+| `power_spike` (AC-L1)     | Last reading shows **41.4 kW** (92% of 45 kW rated)                |
+| `temp_drift` (AC-S2)      | Last reading shows **27.1°C** vs setpoint **24.0°C** (3.1°C drift) |
+| `nonstop_runtime` (AC-L3) | **19 hours** of forced ON in the trailing window                   |
 
 These match the test-suite assertions in `test_alerts.py` exactly so
 the rule plumbing stays verified.

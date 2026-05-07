@@ -24,7 +24,7 @@ First page the user sees after login — has to read in one glance.
 ### Components
 
 - `src/components/dashboard/alert-banner.tsx` — `<AlertBanner alerts
-  onSelect />`. Stacks one row per alert with severity-driven colour:
+onSelect />`. Stacks one row per alert with severity-driven colour:
   destructive border + tinted bg + AlertTriangle for `critical`, neutral
   border + muted bg + CircleAlert for `warning`. Renders nothing when
   the array is empty (no "all clear" placeholder; the absence of the
@@ -47,7 +47,7 @@ First page the user sees after login — has to read in one glance.
   (more energy = bad), green when down (savings), muted when no
   baseline. Layout: 2 columns on mobile, 3 on md, 6 on xl.
 - **Machine grid** — same 12-card grid as `/machines` but cards link
-  *into* `/machines?selected=<id>` rather than selecting in place.
+  _into_ `/machines?selected=<id>` rather than selecting in place.
   This keeps the Overview a launching pad and `/machines` the
   full inspection surface.
 

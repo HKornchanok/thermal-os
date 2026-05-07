@@ -33,11 +33,11 @@ means 06:00 **Bangkok**. Django stores the resulting tz-aware datetime
 as UTC (USE_TZ=True), but the round-trip via ISO → `new Date(iso)` →
 local renders correctly:
 
-| Stored UTC          | Bangkok local | Browser elsewhere       |
-|---------------------|---------------|-------------------------|
-| 2026-05-04T15:00Z   | 22:00 BKK     | 11:00 ET / 16:00 CET    |
-| 2026-05-04T11:30Z   | 18:30 BKK     | 07:30 ET / 12:30 CET    |
-| 2026-05-04T00:00Z   | 07:00 BKK     | shifted by viewer's TZ  |
+| Stored UTC        | Bangkok local | Browser elsewhere      |
+| ----------------- | ------------- | ---------------------- |
+| 2026-05-04T15:00Z | 22:00 BKK     | 11:00 ET / 16:00 CET   |
+| 2026-05-04T11:30Z | 18:30 BKK     | 07:30 ET / 12:30 CET   |
+| 2026-05-04T00:00Z | 07:00 BKK     | shifted by viewer's TZ |
 
 A Bangkok-based viewer (the assessment audience) sees the schedule at
 the right wall-clock; a remote viewer sees the same building day
@@ -49,11 +49,11 @@ happened in Bangkok at this UTC moment."
 Playwright check on `/decisions` with `Intl.DateTimeFormat` reporting
 `Asia/Bangkok`:
 
-| Stored ISO              | Rendered            | Brief expects |
-|-------------------------|---------------------|---------------|
-| 2026-05-04T15:00:00Z    | May 04, **10:00 PM**| 22:00 lobby night mode ✅ |
-| 2026-05-04T12:00:00Z    | May 04, **07:00 PM**| 19:00 evening shutdown ✅ |
-| 2026-05-04T11:30:00Z    | May 04, **06:30 PM**| 18:30 office floors close ✅ |
+| Stored ISO           | Rendered             | Brief expects                |
+| -------------------- | -------------------- | ---------------------------- |
+| 2026-05-04T15:00:00Z | May 04, **10:00 PM** | 22:00 lobby night mode ✅    |
+| 2026-05-04T12:00:00Z | May 04, **07:00 PM** | 19:00 evening shutdown ✅    |
+| 2026-05-04T11:30:00Z | May 04, **06:30 PM** | 18:30 office floors close ✅ |
 
 `/energy` X-axis now spans `23:00 → 23:00` (Bangkok local last 24h)
 with hourly ticks from 06:00 morning ramp-up through 22:00 night mode.

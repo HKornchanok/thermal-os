@@ -61,6 +61,7 @@ xTicks: ["00:00", "01:00", "02:00", ..., "23:00"]   ← 24 ticks, full BKK day
 Previously: `["07:00", "08:00", ..., "23:00"]` — 17 ticks.
 
 Overview summary KPIs still resolve sensible numbers:
+
 - today_kwh: 1,786 kWh
 - yesterday_kwh: 1,690 kWh
 - trend_pct: +5.7%

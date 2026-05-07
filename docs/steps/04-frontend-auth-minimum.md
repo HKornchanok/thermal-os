@@ -18,30 +18,30 @@ Auth was wired and unit-tested in Step 03, but a passing pytest run + curl probe
 
 ## Files created
 
-| Path | Purpose |
-|------|---------|
-| `frontend/package.json` | Pinned versions: next 14.2.18, next-auth 4.24.10, react 18.3.1, typescript 5.6.3 |
-| `frontend/tsconfig.json` | Standard Next.js Pages Router tsconfig with `@/*` path alias |
-| `frontend/next.config.js` | `rewrites().fallback` proxy to `${BACKEND_URL}/api/*` |
-| `frontend/Dockerfile` | `node:20-alpine`, `npm install`, `npm run dev` |
-| `frontend/.env.example` | `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `BACKEND_URL` |
-| `frontend/.dockerignore` | Excludes `node_modules`, `.next`, `.env*` from build context |
-| `frontend/next-env.d.ts` | Next.js TypeScript reference shim |
-| `frontend/src/types/next-auth.d.ts` | Module augmentation: `Session.accessToken`, `Session.error`, `JWT.refreshToken` etc. |
-| `frontend/src/pages/_app.tsx` | `<SessionProvider>` wrapping the app |
-| `frontend/src/pages/api/auth/[...nextauth].ts` | CredentialsProvider posting to Django, JWT/session callbacks with refresh logic |
-| `frontend/src/pages/login.tsx` | Credentials form with `data-testid` hooks for E2E |
-| `frontend/src/pages/index.tsx` | Authenticated landing — shows user + token preview + sign-out |
+| Path                                           | Purpose                                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `frontend/package.json`                        | Pinned versions: next 14.2.18, next-auth 4.24.10, react 18.3.1, typescript 5.6.3     |
+| `frontend/tsconfig.json`                       | Standard Next.js Pages Router tsconfig with `@/*` path alias                         |
+| `frontend/next.config.js`                      | `rewrites().fallback` proxy to `${BACKEND_URL}/api/*`                                |
+| `frontend/Dockerfile`                          | `node:20-alpine`, `npm install`, `npm run dev`                                       |
+| `frontend/.env.example`                        | `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, `BACKEND_URL`                                     |
+| `frontend/.dockerignore`                       | Excludes `node_modules`, `.next`, `.env*` from build context                         |
+| `frontend/next-env.d.ts`                       | Next.js TypeScript reference shim                                                    |
+| `frontend/src/types/next-auth.d.ts`            | Module augmentation: `Session.accessToken`, `Session.error`, `JWT.refreshToken` etc. |
+| `frontend/src/pages/_app.tsx`                  | `<SessionProvider>` wrapping the app                                                 |
+| `frontend/src/pages/api/auth/[...nextauth].ts` | CredentialsProvider posting to Django, JWT/session callbacks with refresh logic      |
+| `frontend/src/pages/login.tsx`                 | Credentials form with `data-testid` hooks for E2E                                    |
+| `frontend/src/pages/index.tsx`                 | Authenticated landing — shows user + token preview + sign-out                        |
 
 ## Files modified
 
-| Path | Change |
-|------|--------|
+| Path                 | Change                                                                                                                                               |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `docker-compose.yml` | New `frontend` service depending on `backend`, `${FRONTEND_PORT:-3000}` mapping, anonymous volumes for `node_modules` + `.next` to avoid host-shadow |
 
 ## Critical bug found and fixed during verification
 
-**Symptom:** Right after first `docker compose up`, NextAuth requests to `/api/auth/_log` and `/api/auth/error` returned 404 from Django — visible in `alto-tech-backend-1` logs.
+**Symptom:** Right after first `docker compose up`, NextAuth requests to `/api/auth/_log` and `/api/auth/error` returned 404 from Django — visible in `thermalos-backend-1` logs.
 
 **Root cause:** Initial `next.config.js` returned the rewrite as a plain array — Next.js treats that as `afterFiles`, which runs **before** dynamic file routes. NextAuth's `[...nextauth].ts` is a dynamic catch-all, so my `/api/:path*` proxy was beating it to the punch and shipping NextAuth's internal endpoints to Django.
 
@@ -61,17 +61,18 @@ This is a precedence subtlety I'd already considered in planning but hadn't gott
 
 ## Verification (executed via Playwright + browser_evaluate)
 
-| Check | Result |
-|-------|--------|
-| `GET /login` renders the form | ✅ "Sign in · ThermalOS" |
-| Submit `admin/admin` → redirect to `/` | ✅ URL changes, "Signed in as **admin**" rendered |
-| Access-token preview is a 3-segment JWT | ✅ `eyJhbGciOiJI…ppYoLcZE_Yps` |
-| Submit `admin/definitely-wrong` → stays on `/login` with "Invalid username or password." | ✅ |
-| Sign out → redirect to `/login` | ✅ |
+| Check                                                                                    | Result                                                                                                                             |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /login` renders the form                                                            | ✅ "Sign in · ThermalOS"                                                                                                           |
+| Submit `admin/admin` → redirect to `/`                                                   | ✅ URL changes, "Signed in as **admin**" rendered                                                                                  |
+| Access-token preview is a 3-segment JWT                                                  | ✅ `eyJhbGciOiJI…ppYoLcZE_Yps`                                                                                                     |
+| Submit `admin/definitely-wrong` → stays on `/login` with "Invalid username or password." | ✅                                                                                                                                 |
+| Sign out → redirect to `/login`                                                          | ✅                                                                                                                                 |
 | `GET /api/auth/session` after sign-in returns `{user:{name:"admin"}, accessToken:"..."}` | ✅ JWT decodes to `{token_type:"access", user_id:"1", exp-iat=1800}` (= 30 min, matches Django `SIMPLE_JWT.ACCESS_TOKEN_LIFETIME`) |
-| `document.cookie` from JS is empty after login | ✅ NextAuth session cookie is httpOnly — XSS-safe per DESIGN.md trade-off note |
+| `document.cookie` from JS is empty after login                                           | ✅ NextAuth session cookie is httpOnly — XSS-safe per DESIGN.md trade-off note                                                     |
 
 Screenshots captured:
+
 - `phase4-login-success.png` — landing page with admin user + access token preview
 - `phase4-login-error.png` — login form with "Invalid username or password."
 
@@ -103,6 +104,7 @@ These will come alongside Phase 3 (read endpoints) and Phase 5 (pages) — there
 ## Next
 
 Phase 3 — implement the eight read endpoints. With auth fully proven through the UI, the natural test for each endpoint is now:
+
 1. `curl -H "Authorization: Bearer <expired-token>"` → 401
 2. `curl -H "Authorization: Bearer <fresh-token>"` → 200 + correct shape
 3. Direct call from the running frontend (via TanStack Query once we add it) → renders without errors

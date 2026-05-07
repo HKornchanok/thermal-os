@@ -16,13 +16,13 @@ live building telemetry.
 
 ### Behaviour matrix
 
-| Input                              | Status | Body                                                |
-|------------------------------------|--------|-----------------------------------------------------|
-| missing/empty `message`            | 400    | `{"detail": "..."}`                                 |
-| `ANTHROPIC_API_KEY` unset          | 200    | `{"reply": "AI assistant is not configured..."}`    |
-| `anthropic` package missing        | 200    | `{"reply": "AI assistant is not installed..."}`     |
-| upstream Anthropic error           | 502    | `{"detail": "Upstream AI error: ..."}`              |
-| happy path                         | 200    | `{"reply": "<assistant text>"}`                     |
+| Input                       | Status | Body                                             |
+| --------------------------- | ------ | ------------------------------------------------ |
+| missing/empty `message`     | 400    | `{"detail": "..."}`                              |
+| `ANTHROPIC_API_KEY` unset   | 200    | `{"reply": "AI assistant is not configured..."}` |
+| `anthropic` package missing | 200    | `{"reply": "AI assistant is not installed..."}`  |
+| upstream Anthropic error    | 502    | `{"detail": "Upstream AI error: ..."}`           |
+| happy path                  | 200    | `{"reply": "<assistant text>"}`                  |
 
 The "no key → 200" path is intentional and matches DESIGN — the chat
 page must not 500 in environments without the bonus dependency

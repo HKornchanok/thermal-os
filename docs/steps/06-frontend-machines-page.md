@@ -17,7 +17,7 @@ into a specific machine on the Overview page later.
   of machines (12 rows, with `latest_reading` joined server-side). Lives at
   30s `refetchInterval` so the grid stays fresh while the page is open.
 - `src/lib/hooks/use-machine-sensors.ts` — `useMachineSensors({ machineId,
-  metric, bucket, from, to })`. Exports the `MachineMetric` and
+metric, bucket, from, to })`. Exports the `MachineMetric` and
   `MachineSensorBucket` union types so the page can drive the metric tabs
   type-safely. `enabled: !!token && machineId > 0` keeps it from firing
   before a selection is made. `keepPreviousData` smooths the chart when the
@@ -34,7 +34,7 @@ into a specific machine on the Overview page later.
   otherwise. Selected highlight uses `border-primary ring-1 ring-primary`.
 - `src/components/ui/tabs.tsx` — Standard shadcn Tabs (Radix-backed).
   Active state via `data-[state=active]:bg-primary
-  data-[state=active]:text-primary-foreground`; disabled triggers go to
+data-[state=active]:text-primary-foreground`; disabled triggers go to
   50% opacity and lose pointer events. Uses `@radix-ui/react-tabs`
   (newly installed).
 
@@ -44,7 +44,7 @@ into a specific machine on the Overview page later.
   `<LoadingState />` / `<ErrorState />` components.
 - Selection lives in `?selected=<id>` query string, mirrored into local
   state via `useEffect`. `select(id)` does a `router.replace(..., {
-  shallow: true })` so the URL updates without a server round-trip.
+shallow: true })` so the URL updates without a server round-trip.
 - Metric tabs: all four (`power_kw`, `temperature`, `setpoint`,
   `speed_pct`) render side-by-side, but `metricsForMachine(machine)`
   decides which are enabled — fans get power + speed, ACs get the

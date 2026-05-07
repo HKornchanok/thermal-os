@@ -113,7 +113,8 @@ docs/steps/19-seed-day-variation.md
 ```
 
 The seed module grows from ~370 to ~430 lines; new `DayPlan` dataclass
-+ `_make_day_plan` factory + `_DAY_PLANS` lookup are the bulk. Existing
-helpers (`_setpoint_for`, `_is_on`, `_outdoor_temp`,
-`_gen_day_decisions`) all read from the plan via `_plan_for(dt)`
-without parameter threading.
+
+- `_make_day_plan` factory + `_DAY_PLANS` lookup are the bulk. Existing
+  helpers (`_setpoint_for`, `_is_on`, `_outdoor_temp`,
+  `_gen_day_decisions`) all read from the plan via `_plan_for(dt)`
+  without parameter threading.
