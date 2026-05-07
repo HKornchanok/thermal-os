@@ -30,7 +30,7 @@ To enable the chat assistant, set `ANTHROPIC_API_KEY` and recreate the
 backend container. Without the key, `/chat` returns a graceful
 fallback message.
 
-## Routes
+## Frontend routes
 
 | Route        | Surface                                                |
 | ------------ | ------------------------------------------------------ |
@@ -41,8 +41,27 @@ fallback message.
 | `/compare`   | Before/After KPIs + overlaid hourly chart              |
 | `/chat`      | Anthropic-grounded assistant                           |
 
-JWT auth (SimpleJWT) issued at `/api/auth/token/`; NextAuth wraps it in
-an httpOnly cookie. Access tokens 30min, refresh 7 days.
+## API
+
+All endpoints are JSON, JWT-protected (Bearer header). Full request/response
+shapes in [`DESIGN.md §1B`](./DESIGN.md).
+
+| Endpoint                             | Returns                                              |
+| ------------------------------------ | ---------------------------------------------------- |
+| `POST /api/auth/token/`              | Access (30 min) + refresh (7 d) tokens               |
+| `POST /api/auth/token/refresh/`      | New access token                                     |
+| `GET  /api/machines/`                | 12 machines + latest reading per machine             |
+| `GET  /api/machines/{id}/sensors/`   | Time-series for one metric (allowlisted bucket)      |
+| `GET  /api/building/summary/`        | 8-field overview (kWh today, trend, avg temp, …)     |
+| `GET  /api/building/energy/`         | Building-wide power timeseries (15min / 1h buckets)  |
+| `GET  /api/building/energy/by-zone/` | Zone breakdown, server-side pivot                    |
+| `GET  /api/decisions/`               | Paginated AI decisions, filterable by date / action  |
+| `GET  /api/energy/compare/`          | Before-vs-after avg power + `savings_pct`            |
+| `GET  /api/alerts/`                  | Derived alerts (3 rules, no DB writes)               |
+| `POST /api/chat/`                    | Anthropic reply with grounded context (rate-limited) |
+
+NextAuth wraps the JWT in a signed httpOnly cookie so the access token
+never touches `localStorage`.
 
 ## Architecture
 
@@ -97,11 +116,32 @@ for details and the `ALLOWED_HOSTS` gotcha.
 The same images push cleanly to Fly / Railway / Cloud Run (backend) +
 Vercel (frontend) with managed Timescale Postgres.
 
-## Trade-off notes
+## Key decisions & trade-offs
 
-See [`DESIGN.md` §"Trade-Off Notes"](./DESIGN.md). Headlines: raw SQL
-over the ORM for hot paths, server-side pivot for by-zone, JWT-in-cookie
-via NextAuth, 30s polling instead of WebSockets.
+Headlines below; full reasoning in
+[`DESIGN.md §"Trade-Off Notes"`](./DESIGN.md).
+
+- **Raw SQL via `connection.cursor()` for hot paths** — DRF's ORM
+  generates extra joins; latest-reading and time-bucket queries run
+  hundreds of times per page load
+- **`time_bucket()` not `DATE_TRUNC()`** — chunk-aware, preserves
+  hypertable pruning. `DATE_TRUNC` triggers full scans
+- **`DISTINCT ON (machine_id)` for latest reading** — one index scan
+  on the most recent chunk; subquery-per-machine is ~12× slower
+- **JWT in httpOnly cookie via NextAuth** — XSS-safe; access token
+  never reaches `localStorage`. 30 min access / 7 d refresh
+- **30 s polling, not WebSockets** — sensor data arrives every 5 min;
+  Channels + Redis broker would buy nothing visible to users
+- **Pages Router, not App Router** — RSC default doesn't compose with
+  TanStack Query's `refetchInterval`; would need `"use client"` everywhere
+- **Server-side pivot for by-zone** — Python `defaultdict` keyed by
+  bucket; clients shouldn't reshape time-series matrices
+- **Bangkok TZ hardcoded in `utils.py`** — the brief specifies a
+  Bangkok building; UTC anchoring made "06:00 building opens" land at
+  13:00 local. Production multi-region would lift to settings
+- **`DayPlan` as single source for readings + decisions** — chart
+  changes at the same minute the decision logs it, so the dashboard
+  story stays internally consistent
 
 ## What I'd improve with more time
 
