@@ -54,6 +54,9 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # WhiteNoise serves collected static files in prod. Harmless in dev when
+    # DEBUG=True (Django's runserver staticfiles finder takes precedence).
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -100,6 +103,14 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+# Touch the dir so WhiteNoise stops complaining in dev — collectstatic
+# only runs in prod (Dockerfile.prod), so the dir would otherwise be
+# missing under runserver. Manifest storage stays prod-only because it
+# requires every referenced asset to exist post-collectstatic.
+STATIC_ROOT.mkdir(parents=True, exist_ok=True)
+if not DEBUG:
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
