@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta, timezone
-from typing import Optional
 
 from django.db import connection
-
 
 # Allowlists for values that get string-formatted into raw SQL.
 # NEVER format un-allowlisted user input — use %s parameter binding.
@@ -31,10 +29,10 @@ ALLOWED_ACTIONS: set[str] = {"turn_on", "turn_off", "set_temp"}
 def dictfetchall(cursor) -> list[dict]:
     """Return all rows from a cursor as a list of dicts keyed by column name."""
     columns = [c[0] for c in cursor.description]
-    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+    return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
 
 
-def parse_iso_datetime(s: Optional[str]) -> Optional[datetime]:
+def parse_iso_datetime(s: str | None) -> datetime | None:
     """Parse an ISO 8601 datetime string. Returns None for None/empty.
 
     Naive datetimes (no offset) are rejected — without a tz, Django
@@ -51,7 +49,7 @@ def parse_iso_datetime(s: Optional[str]) -> Optional[datetime]:
     return dt
 
 
-def get_max_recorded_at(machine_id: Optional[int] = None) -> Optional[datetime]:
+def get_max_recorded_at(machine_id: int | None = None) -> datetime | None:
     """Latest sensor timestamp, optionally scoped to one machine."""
     with connection.cursor() as cursor:
         if machine_id is None:
@@ -65,7 +63,7 @@ def get_max_recorded_at(machine_id: Optional[int] = None) -> Optional[datetime]:
     return row[0] if row and row[0] else None
 
 
-def get_min_max_recorded_at() -> tuple[Optional[datetime], Optional[datetime]]:
+def get_min_max_recorded_at() -> tuple[datetime | None, datetime | None]:
     """Earliest + latest sensor timestamps. Drives /api/energy/compare/ defaults."""
     with connection.cursor() as cursor:
         cursor.execute("SELECT MIN(recorded_at), MAX(recorded_at) FROM building_sensorreading")
@@ -90,12 +88,12 @@ def day_end(dt: datetime) -> datetime:
 
 
 def resolve_window(
-    from_dt: Optional[datetime],
-    to_dt: Optional[datetime],
+    from_dt: datetime | None,
+    to_dt: datetime | None,
     *,
     default_hours: int = 24,
-    machine_id: Optional[int] = None,
-) -> Optional[tuple[datetime, datetime]]:
+    machine_id: int | None = None,
+) -> tuple[datetime, datetime] | None:
     """Fill missing from/to with trailing-window defaults.
 
     Returns None when neither is provided AND no readings exist —
@@ -110,6 +108,6 @@ def resolve_window(
     return from_dt, to_dt
 
 
-def yesterday_kwh_or_none(raw: Optional[float]) -> Optional[float]:
+def yesterday_kwh_or_none(raw: float | None) -> float | None:
     """Treat NULL/0 yesterday_kwh as "no data" to avoid divide-by-zero in trend calcs."""
     return raw if raw and raw > 0 else None

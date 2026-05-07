@@ -1,9 +1,8 @@
 """Tests for GET /api/machines/{id}/sensors/."""
 
-from datetime import timedelta, timezone
+from datetime import UTC, timedelta
 
 import pytest
-
 
 pytestmark = pytest.mark.django_db
 
@@ -150,7 +149,7 @@ def test_sensors_temperature_on_fan_returns_empty(admin_client, _seed_machine_fa
 def test_sensors_custom_range_works(admin_client, _seed_machine_id, _seed_max_ts):
     # Use Z suffix in the URL — `+` in a query value is decoded as a space.
     def _z(dt):
-        return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     from_dt = _z(_seed_max_ts - timedelta(hours=2))
     to_dt = _z(_seed_max_ts)

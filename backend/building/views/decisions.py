@@ -13,7 +13,6 @@ from building.utils import (
     resolve_window,
 )
 
-
 PAGE_SIZE_MIN = 1
 PAGE_SIZE_MAX = 100
 

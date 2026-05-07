@@ -18,7 +18,6 @@ from building.utils import (
     yesterday_kwh_or_none,
 )
 
-
 # Fans don't have temperature; only AC types feed the avg_temperature KPI.
 AC_MACHINE_TYPES = ("large_ac", "small_ac")
 

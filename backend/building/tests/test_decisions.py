@@ -4,7 +4,6 @@ from math import ceil
 
 import pytest
 
-
 pytestmark = pytest.mark.django_db
 
 

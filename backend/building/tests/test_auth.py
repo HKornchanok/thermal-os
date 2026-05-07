@@ -9,7 +9,6 @@ import pytest
 from django.urls import reverse
 from rest_framework_simplejwt.tokens import AccessToken
 
-
 pytestmark = pytest.mark.django_db
 
 
